@@ -23,7 +23,7 @@ services:
     container_name: lexguard-ollama-init
     depends_on:
       - ollama
-    entrypoint: /bin/sh -c "sleep 10 && OLLAMA_HOST=http://ollama:11434 ollama pull gemma2:2b && echo 'Модель gemma2:2b готова'"
+    entrypoint: /bin/sh -c "sleep 10 && OLLAMA_HOST=http://ollama:11434 ollama pull ${LLM_MODEL:-gemma2:2b} && echo 'Модель ${LLM_MODEL:-gemma2:2b} готова'"
     restart: "no"
 
   backend:
@@ -38,7 +38,7 @@ services:
       - ollama
     environment:
       - PYTHONUNBUFFERED=1
-      - OLLAMA_MODEL=gemma2:2b
+      - LLM_MODEL=${LLM_MODEL:-gemma2:2b}
     volumes:
       - ./backend:/app
     restart: unless-stopped

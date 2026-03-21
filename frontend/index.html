@@ -671,6 +671,138 @@
     50% { opacity: 0.4; }
   }
 
+  /* Divider */
+  .chat-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 32px 0 20px;
+    color: var(--text-muted);
+    font-size: 11px; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .chat-divider::before, .chat-divider::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--border);
+  }
+
+  /* Chips */
+  .chat-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 20px;
+  }
+  .chat-chip {
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    font-size: 12px; font-family: var(--font-body);
+    color: var(--text-muted);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .chat-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  /* Message area */
+  .chat-messages {
+    display: flex; flex-direction: column; gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Bubbles */
+  .chat-bubble {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px; line-height: 1.7;
+    animation: fadeIn 0.2s ease;
+  }
+  .chat-bubble.user {
+    align-self: flex-end;
+    background: var(--accent-glow);
+    border: 1px solid rgba(79,142,247,0.25);
+    color: var(--text);
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bubble.assistant {
+    align-self: flex-start;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+  .bubble-time {
+    font-size: 10px; font-family: var(--font-mono);
+    color: var(--text-dim); margin-top: 6px;
+  }
+
+  /* Links to risks inside messages */
+  .risk-ref {
+    display: inline-block;
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 1px 6px; border-radius: 4px;
+    cursor: pointer; font-weight: 500;
+    transition: opacity 0.15s;
+  }
+  .risk-ref:hover { opacity: 0.75; }
+  .risk-ref.high {
+    background: var(--high-bg); color: var(--high);
+    border: 1px solid var(--high-border);
+  }
+  .risk-ref.medium {
+    background: var(--medium-bg); color: var(--medium);
+    border: 1px solid var(--medium-border);
+  }
+  .risk-ref.low {
+    background: var(--low-bg); color: var(--low);
+    border: 1px solid var(--low-border);
+  }
+
+  /* Print indicator */
+  .typing-bubble {
+    display: flex; align-items: center; gap: 4px;
+    padding: 14px 18px; width: fit-content;
+  }
+  .typing-bubble span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-muted);
+    animation: typingDot 1.2s ease-in-out infinite;
+  }
+  .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingDot {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-5px); }
+  }
+
+  /* Input field */
+  .chat-input-wrap {
+    display: flex; align-items: flex-end; gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px;
+    transition: border-color 0.2s;
+  }
+  .chat-input-wrap:focus-within {
+    border-color: var(--accent);
+  }
+  .chat-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-family: var(--font-body); font-size: 13px;
+    line-height: 1.6; resize: none; min-height: 20px; max-height: 80px;
+    overflow-y: auto;
+  }
+  .chat-input::placeholder { color: var(--text-dim); }
+  .chat-send-btn {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: var(--accent); color: #fff; border: none;
+    font-size: 16px; cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chat-send-btn:hover:not(:disabled) { background: #3d7af0; }
+  .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
   /* ── Responsive ── */
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
@@ -819,6 +951,30 @@
 
       <div class="risk-list" id="riskList"></div>
     </div>
+
+    <div id="chatSection" style="display:none">
+      <div class="chat-divider">
+        <span>AI assistant</span>
+      </div>
+
+      <div class="chat-chips" id="chatChips"></div>
+      <div class="chat-messages" id="chatMessages"></div>
+
+      <div class="chat-bubble assistant typing-bubble" id="typingIndicator" style="display:none">
+        <span></span><span></span><span></span>
+      </div>
+
+      <div class="chat-input-wrap">
+        <textarea
+          id="chatInput"
+          class="chat-input"
+          placeholder="Ask a question about the contract..."
+          rows="1"
+          maxlength="2000"
+        ></textarea>
+        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">→</button>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -827,6 +983,9 @@ const API = '/api/v1';
 let currentFile = null;
 let currentResult = null;
 let activeFilter = 'all';
+let chatSessionId = null;
+let chatWaiting = false;
+let chatChipsVisible = true;
 
 // ── Status check ──
 async function checkStatus() {
@@ -997,6 +1156,7 @@ function renderResults(data) {
   });
 
   applyFilter(activeFilter);
+  chatInit(data.analysis_id, data.risks);
 }
 
 function createRiskCard(risk, idx) {
@@ -1059,6 +1219,193 @@ function applyFilter(filter) {
   });
 }
 
+async function chatInit(analysisId, risks) {
+  chatSessionId = null;
+  chatWaiting = false;
+  chatChipsVisible = true;
+
+  const messages = document.getElementById('chatMessages');
+  const input = document.getElementById('chatInput');
+  const chips = document.getElementById('chatChips');
+  const typing = document.getElementById('typingIndicator');
+
+  messages.innerHTML = '';
+  chips.style.display = 'flex';
+  chips.innerHTML = '';
+  input.value = '';
+  chatAutoResize(input);
+  typing.style.display = 'none';
+  document.getElementById('chatSection').style.display = 'block';
+  chatSetInputState(false);
+  chatRenderChips(risks);
+
+  try {
+    const r = await fetch(`${API}/chat/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: analysisId })
+    });
+    if (!r.ok) throw new Error("Couldn't create a session");
+    const data = await r.json();
+    chatSessionId = data.session_id;
+    chatSetInputState(true);
+
+    const riskyCount = risks.filter(x => x.is_risky).length;
+    const highCount = risks.filter(x => x.risk_level === 'high').length;
+    const welcome = `Контракт проанализирован. Найдено рисков: **${riskyCount}**`
+      + (highCount > 0 ? `, из них высоких: **${highCount}**` : '')
+      + '. Задайте любой вопрос по документу.';
+    chatAppendBubble('assistant', welcome);
+  } catch (e) {
+    chatAppendBubble('assistant', 'Chat temporarily unavailable: ' + e.message, true);
+  }
+}
+
+function chatRenderChips(risks) {
+  const container = document.getElementById('chatChips');
+  container.innerHTML = '';
+  const chips = [];
+
+  const highRisks = risks.filter(r => r.risk_level === 'high').slice(0, 2);
+  highRisks.forEach(r => chips.push(`Объясни подробнее риск #${r.segment_id}`));
+  chips.push('Какие пункты нужно переписать в первую очередь?');
+  chips.push('Предложи безопасную формулировку');
+  if (risks.filter(r => r.is_risky).length > 2) chips.push('Есть ли противоречия в договоре?');
+
+  chips.slice(0, 4).forEach(text => {
+    const btn = document.createElement('button');
+    btn.className = 'chat-chip';
+    btn.textContent = text;
+    btn.onclick = () => chatSendQuick(text);
+    container.appendChild(btn);
+  });
+}
+
+function chatSendQuick(text) {
+  document.getElementById('chatInput').value = text;
+  chatAutoResize(document.getElementById('chatInput'));
+  sendChatMessage();
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content || content.length > 2000) return;
+  if (!chatSessionId || chatWaiting) return;
+
+  if (chatChipsVisible) {
+    document.getElementById('chatChips').style.display = 'none';
+    chatChipsVisible = false;
+  }
+
+  input.value = '';
+  chatAutoResize(input);
+  chatAppendBubble('user', content);
+
+  chatWaiting = true;
+  chatSetInputState(false);
+  document.getElementById('typingIndicator').style.display = 'flex';
+  scrollChatToBottom();
+
+  try {
+    const r = await fetch(`${API}/chat/session/${chatSessionId}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+    if (!r.ok) {
+      let msg = 'Ошибка чата';
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const err = await r.json();
+        msg = err.detail || msg;
+      } else {
+        const txt = (await r.text()).trim();
+        if (txt) msg = txt;
+      }
+      throw new Error(msg);
+    }
+    const data = await r.json();
+    chatAppendBubble('assistant', data.content || '');
+  } catch (e) {
+    chatAppendBubble('assistant', 'Ошибка чата: ' + e.message, true);
+  } finally {
+    chatWaiting = false;
+    document.getElementById('typingIndicator').style.display = 'none';
+    chatSetInputState(true);
+    input.focus();
+  }
+}
+
+function chatAppendBubble(role, text, isError = false) {
+  const messages = document.getElementById('chatMessages');
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'assistant'}`;
+  if (isError && role !== 'user') bubble.style.borderColor = 'var(--high-border)';
+
+  const textNode = document.createElement('div');
+  textNode.innerHTML = chatFormatText(text);
+  bubble.appendChild(textNode);
+
+  const time = document.createElement('div');
+  time.className = 'bubble-time';
+  time.textContent = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  bubble.appendChild(time);
+
+  messages.appendChild(bubble);
+  scrollChatToBottom();
+}
+
+function chatFormatText(text) {
+  let html = escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+
+  html = html.replace(/#(\d+)/g, (_, id) => {
+    const risk = (currentResult?.risks || []).find(r => Number(r.segment_id) === Number(id));
+    const lvl = risk ? risk.risk_level : 'low';
+    return `<span class="risk-ref ${lvl}" onclick="scrollToRisk(${id})">#${id}</span>`;
+  });
+  return html;
+}
+
+function scrollToRisk(segmentId) {
+  const cards = Array.from(document.querySelectorAll('.risk-card'));
+  const target = cards.find(c => {
+    const idEl = c.querySelector('.risk-id');
+    return idEl && idEl.textContent === `#${segmentId}`;
+  });
+  if (!target) return;
+  if (!target.classList.contains('expanded')) target.classList.add('expanded');
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function chatSetInputState(enabled) {
+  const input = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSendBtn');
+  input.disabled = !enabled;
+  btn.disabled = !enabled;
+}
+
+function chatAutoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 80) + 'px';
+}
+
+function scrollChatToBottom() {
+  const panel = document.getElementById('panelRight');
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Export ──
 function exportJSON() {
   if (!currentResult) return;
@@ -1079,6 +1426,16 @@ function showError(msg) {
 function hideError() {
   document.getElementById('errorBox').classList.remove('visible');
 }
+
+document.getElementById('chatInput').addEventListener('input', e => {
+  chatAutoResize(e.target);
+});
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
 
 // Init
 checkStatus();

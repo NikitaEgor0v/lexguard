@@ -3,6 +3,7 @@ import requests
 import logging
 import time
 import os
+from config.model_registry import get_model_config
 from models.schemas import (
     AnalysisResponse, AnalysisSummary, RiskItem, RiskLevel, RiskCategory
 )
@@ -11,7 +12,8 @@ from services.rag import RAGService
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = "http://ollama:11434/api/generate"
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma2:2b")
+MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
+MODEL_CONFIG = get_model_config(MODEL_NAME)
 REQUEST_TIMEOUT_SEC = 180
 MAX_LLM_RETRIES = 2
 MAX_SEGMENT_CHARS = 1200
@@ -78,7 +80,11 @@ class AnalyzerService:
                 "prompt": f"{SYSTEM_PROMPT}\n\n{user_prompt}",
                 "stream": False,
                 # Меньший контекст снижает риск падения runner по памяти.
-                "options": {"temperature": 0.0, "num_predict": 300, "num_ctx": 2048},
+                "options": {
+                    "temperature": MODEL_CONFIG.temperature,
+                    "num_predict": MODEL_CONFIG.max_output,
+                    "num_ctx": min(MODEL_CONFIG.context_window, 2048),
+                },
             }
 
             try:
