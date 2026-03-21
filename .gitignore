@@ -1,0 +1,73 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual environments ──
+venv/
+.venv/
+env/
+.env/
+myflaskenv/
+
+# ── Environment variables (СЕКРЕТНЫЕ ДАННЫЕ) ──
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# ── Docker volumes (локальные данные) ──
+volumes/
+docker-volumes/
+
+# ── Модели и данные ML (тяжёлые файлы, не нужны в репо) ──
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+models/
+huggingface_cache/
+.cache/
+
+# ── IDE ──
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Логи ──
+*.log
+logs/
+*.log.*
+
+# ── Тестовые файлы которые не нужны в репо ──
+legal-dataset/
+benchmark.py
+results_*.csv
+benchmark_summary.csv
+
+# ── Временные файлы ──
+*.tmp
+*.bak
+tmp/
+temp/
+
+# ── Jupyter (если используешь) ──
+.ipynb_checkpoints/
+*.ipynb
+
+# ── OS ──
+.DS_Store
+.AppleDouble
+.LSOverride

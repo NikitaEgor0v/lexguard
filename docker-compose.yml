@@ -1,0 +1,61 @@
+services:
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: lexguard-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lexguard-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: lexguard-ollama-init
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh -c "sleep 10 && OLLAMA_HOST=http://ollama:11434 ollama pull gemma2:2b && echo 'Модель gemma2:2b готова'"
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lexguard-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+      - ollama
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_MODEL=gemma2:2b
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lexguard-frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  ollama_data:
