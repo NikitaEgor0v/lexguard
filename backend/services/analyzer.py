@@ -18,6 +18,17 @@ REQUEST_TIMEOUT_SEC = 180
 MAX_LLM_RETRIES = 2
 MAX_SEGMENT_CHARS = 1200
 MAX_RAG_CONTEXT_CHARS = 1200
+MAX_CLASSIFY_PREVIEW_CHARS = 800
+CONTRACT_TYPE_LABELS = frozenset({
+    "услуги", "подряд", "поставка", "аренда", "трудовой",
+    "лицензионный", "нда", "агентский", "иной",
+})
+
+CONTRACT_CLASSIFY_PROMPT = """Определи тип договора по фрагменту. Ответь ОДНИМ словом из списка, без пояснений и пунктуации:
+услуги, подряд, поставка, аренда, трудовой, лицензионный, нда, агентский, иной
+
+Текст:
+"""
 
 SYSTEM_PROMPT = """Ты — система анализа юридических договоров для IT-компании.
 Проанализируй фрагмент договора и верни ТОЛЬКО валидный JSON без пояснений и markdown.
@@ -31,11 +42,15 @@ SYSTEM_PROMPT = """Ты — система анализа юридических
   "recommendation": "конкретная рекомендация по исправлению" или null
 }
 
-Критерии:
-- high: штраф по усмотрению, потеря прав на ПО, расторжение без компенсации, неограниченная ответственность
-- medium: размытые сроки, неопределённые обязанности, несоразмерные санкции
-- low: минорные неточности, избыточные требования без серьёзных последствий
-- none: стандартная нейтральная юридически корректная формулировка"""
+Правила уровня риска (классифицируй только по фактическому содержанию фрагмента):
+- high: применяй, если в тексте есть хотя бы одно из: штраф, неустойка или иная денежная санкция без ограничения суммы или без верхнего предела; утрата прав на программное обеспечение или иные результаты работ без компенсации или без согласованного правопреемства; расторжение или прекращение без выплат контрагенту при отсутствии виновных действий с его стороны (если это прямо следует из формулировки); неограниченная ответственность или отсутствие пределов ответственности там, где закон или практика допускают ограничение.
+- medium: применяй при существенной неопределённости или дисбалансе, не доходящем до high: сроки без измеримых критериев или без привязки к событиям; обязанности сформулированы так, что объём или критерий исполнения нельзя однозначно установить из текста; санкции заведомо несоразмерны предмету обязательства в пользу одной стороны; одна сторона вправе менять существенные условия в одностороннем порядке.
+- low: применяй при незначительных огрехах формулировки или избыточных формальных требованиях, не создающих прямого денежного риска из самого текста.
+- none: применяй, если формулировка нейтральна, сбалансирована и не содержит перечисленных признаков.
+
+Дополнительные правила:
+- Если между high и medium нет однозначности — выбирай high.
+- Не приписывай фрагменту риски, которых в его тексте нет; не выдумывай факты и не ссылайся на условия, отсутствующие в данном фрагменте (если информации недостаточно — снижай уровень или используй none и is_risky=false)."""
 
 
 class AnalyzerService:
@@ -44,10 +59,11 @@ class AnalyzerService:
         self._results: dict[str, AnalysisResponse] = {}
 
     def analyze(self, segments: list[str], analysis_id: str, filename: str = "document") -> AnalysisResponse:
+        contract_type = self._classify_contract_type(segments)
         risks = []
         for i, segment in enumerate(segments):
             logger.info(f"Анализ {i+1}/{len(segments)}")
-            rag_context = self.rag.search(segment)
+            rag_context = self.rag.search(segment, contract_type=contract_type)
             raw = self._call_llm(segment, rag_context)
             risks.append(self._parse(raw, segment, i + 1, rag_context))
 
@@ -83,7 +99,7 @@ class AnalyzerService:
                 "options": {
                     "temperature": MODEL_CONFIG.temperature,
                     "num_predict": MODEL_CONFIG.max_output,
-                    "num_ctx": min(MODEL_CONFIG.context_window, 2048),
+                    "num_ctx": MODEL_CONFIG.context_window,
                 },
             }
 
@@ -108,6 +124,41 @@ class AnalyzerService:
                 time.sleep(1 + attempt)
 
         raise RuntimeError(f"Ошибка генерации в Ollama: {last_error}")
+
+    def _classify_contract_type(self, segments: list[str]) -> str:
+        if not segments:
+            return "иной"
+        if len(segments) >= 2:
+            preview = f"{segments[0]}\n\n{segments[1]}"[:MAX_CLASSIFY_PREVIEW_CHARS]
+        else:
+            preview = segments[0][:MAX_CLASSIFY_PREVIEW_CHARS]
+        if not preview.strip():
+            return "иной"
+        payload = {
+            "model": MODEL_NAME,
+            "prompt": f"{CONTRACT_CLASSIFY_PROMPT}{preview}",
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 10,
+                "num_ctx": 1024,
+            },
+        }
+        try:
+            resp = requests.post(OLLAMA_URL, json=payload, timeout=REQUEST_TIMEOUT_SEC)
+            if resp.status_code >= 400:
+                logger.warning("Классификация типа договора: HTTP %s", resp.status_code)
+                return "иной"
+            answer = (resp.json().get("response") or "").strip().lower()
+            token = answer.split()[0] if answer else ""
+            token = token.strip(".,;:!?\"'«»")
+            if token in CONTRACT_TYPE_LABELS:
+                return token
+        except requests.exceptions.RequestException as e:
+            logger.warning("Классификация типа договора: %s", e)
+        except Exception as e:
+            logger.warning("Классификация типа договора: %s", e)
+        return "иной"
 
     def _parse(self, raw: str, segment: str, sid: int, rag: str | None) -> RiskItem:
         try:

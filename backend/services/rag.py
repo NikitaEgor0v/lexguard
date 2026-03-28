@@ -68,15 +68,35 @@ class RAGService:
         self._client.upsert(collection_name=COLLECTION_NAME, points=points)
         logger.info(f"Проиндексировано {len(points)} норм")
 
-    def search(self, segment: str, top_k: int = TOP_K) -> str | None:
+    def search(
+        self, segment: str, top_k: int = TOP_K, contract_type: str | None = None,
+    ) -> str | None:
         if not self._ready:
             return self._fallback(segment)
         try:
             qv = self._encoder.encode(f"query: {segment}", show_progress_bar=False).tolist()
-            results = self._client.search(
-                collection_name=COLLECTION_NAME, query_vector=qv,
-                limit=top_k, score_threshold=SCORE_THRESHOLD,
+            query_filter = None
+            if contract_type and contract_type != "иной":
+                from qdrant_client.models import Filter, FieldCondition, MatchValue
+                query_filter = Filter(
+                    should=[
+                        FieldCondition(
+                            key="contract_type", match=MatchValue(value=contract_type),
+                        ),
+                        FieldCondition(
+                            key="contract_type", match=MatchValue(value="все"),
+                        ),
+                    ],
+                )
+            search_kwargs = dict(
+                collection_name=COLLECTION_NAME,
+                query_vector=qv,
+                limit=top_k,
+                score_threshold=SCORE_THRESHOLD,
             )
+            if query_filter is not None:
+                search_kwargs["query_filter"] = query_filter
+            results = self._client.search(**search_kwargs)
             if not results:
                 return None
             parts = []
