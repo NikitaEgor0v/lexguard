@@ -1,1174 +1,1395 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LexGuard — Анализ юридических документов</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0d0f14;
-    --surface: #13161e;
-    --surface2: #1a1e28;
-    --border: rgba(255,255,255,0.07);
-    --border-strong: rgba(255,255,255,0.13);
-    --text: #e8eaf0;
-    --text-muted: #6b7280;
-    --text-dim: #4b5563;
-    --accent: #4f8ef7;
-    --accent-glow: rgba(79,142,247,0.15);
-    --high: #ef4444;
-    --high-bg: rgba(239,68,68,0.08);
-    --high-border: rgba(239,68,68,0.2);
-    --medium: #f59e0b;
-    --medium-bg: rgba(245,158,11,0.08);
-    --medium-border: rgba(245,158,11,0.2);
-    --low: #3b82f6;
-    --low-bg: rgba(59,130,246,0.08);
-    --low-border: rgba(59,130,246,0.2);
-    --none: #6b7280;
-    --none-bg: rgba(107,114,128,0.08);
-    --success: #10b981;
-    --font-display: 'Playfair Display', Georgia, serif;
-    --font-body: 'Manrope', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-body);
-    font-size: 14px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
-
-  /* ── Topbar ── */
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    height: 56px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--font-display);
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    color: var(--text);
-  }
-
-  .logo-icon {
-    width: 28px;
-    height: 28px;
-    background: var(--accent);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-  }
-
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-dim);
-  }
-  .status-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
-  .status-dot.error { background: var(--high); }
-
-  /* ── Layout ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    min-height: calc(100vh - 56px);
-  }
-
-  /* ── Left panel ── */
-  .panel-left {
-    border-right: 1px solid var(--border);
-    padding: 32px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-  }
-
-  .panel-title {
-    font-family: var(--font-display);
-    font-size: 22px;
-    font-weight: 400;
-    line-height: 1.3;
-    color: var(--text);
-  }
-
-  .panel-subtitle {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 6px;
-    line-height: 1.6;
-  }
-
-  /* ── Upload zone ── */
-  .upload-zone {
-    border: 1.5px dashed var(--border-strong);
-    border-radius: 12px;
-    padding: 36px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: var(--surface);
-    position: relative;
-  }
-
-  .upload-zone:hover, .upload-zone.dragover {
-    border-color: var(--accent);
-    background: var(--accent-glow);
-  }
-
-  .upload-zone input[type=file] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-  }
-
-  .upload-icon {
-    width: 44px;
-    height: 44px;
-    margin: 0 auto 14px;
-    border: 1.5px solid var(--border-strong);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    background: var(--surface2);
-  }
-
-  .upload-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text);
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .upload-hint {
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-
-  .file-selected {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-  }
-
-  .file-selected.visible { display: flex; }
-
-  .file-ext {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    padding: 2px 7px;
-    border-radius: 4px;
-    background: var(--accent-glow);
-    color: var(--accent);
-    border: 1px solid rgba(79,142,247,0.2);
-    flex-shrink: 0;
-  }
-
-  .file-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text);
-  }
-
-  .file-remove {
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    flex-shrink: 0;
-  }
-  .file-remove:hover { color: var(--high); }
-
-  /* ── Analyze button ── */
-  .btn-analyze {
-    width: 100%;
-    padding: 13px 24px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-family: var(--font-body);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 0.01em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .btn-analyze:hover:not(:disabled) {
-    background: #3d7af0;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(79,142,247,0.3);
-  }
-
-  .btn-analyze:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  /* ── Progress ── */
-  .progress-wrap {
-    display: none;
-  }
-  .progress-wrap.visible { display: block; }
-
-  .progress-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    font-family: var(--font-mono);
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .progress-track {
-    height: 3px;
-    background: var(--surface2);
-    border-radius: 99px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 99px;
-    width: 0%;
-    transition: width 0.5s ease;
-  }
-
-  /* ── Info cards ── */
-  .info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .info-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-  }
-
-  .info-card-label {
-    font-size: 11px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 4px;
-    font-family: var(--font-mono);
-  }
-
-  .info-card-value {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    font-family: var(--font-mono);
-  }
-
-  .info-card-value.high { color: var(--high); }
-  .info-card-value.medium { color: var(--medium); }
-  .info-card-value.accent { color: var(--accent); }
-
-  /* ── Score gauge ── */
-  .score-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px;
-  }
-
-  .score-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-
-  .score-title {
-    font-size: 12px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-family: var(--font-mono);
-  }
-
-  .score-value {
-    font-family: var(--font-mono);
-    font-size: 20px;
-    font-weight: 500;
-  }
-
-  .score-bar {
-    height: 6px;
-    background: var(--surface2);
-    border-radius: 99px;
-    overflow: hidden;
-  }
-
-  .score-fill {
-    height: 100%;
-    border-radius: 99px;
-    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
-  /* ── Right panel ── */
-  .panel-right {
-    padding: 32px;
-    overflow-y: auto;
-  }
-
-  /* ── Empty state ── */
-  .empty-state {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    gap: 16px;
-    color: var(--text-dim);
-  }
-
-  .empty-icon {
-    font-size: 48px;
-    opacity: 0.3;
-  }
-
-  .empty-title {
-    font-family: var(--font-display);
-    font-size: 20px;
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
-  /* ── Results header ── */
-  .results-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 24px;
-    gap: 16px;
-  }
-
-  .results-title {
-    font-family: var(--font-display);
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .results-filename {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    margin-top: 4px;
-  }
-
-  .btn-export {
-    padding: 8px 16px;
-    background: transparent;
-    border: 1px solid var(--border-strong);
-    border-radius: 8px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-family: var(--font-body);
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .btn-export:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  /* ── Filters ── */
-  .filters {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-
-  .filter-btn {
-    padding: 5px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: transparent;
-    font-size: 12px;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .filter-btn:hover { border-color: var(--border-strong); color: var(--text); }
-  .filter-btn.active { background: var(--accent-glow); border-color: rgba(79,142,247,0.3); color: var(--accent); }
-  .filter-btn.active.f-high { background: var(--high-bg); border-color: var(--high-border); color: var(--high); }
-  .filter-btn.active.f-medium { background: var(--medium-bg); border-color: var(--medium-border); color: var(--medium); }
-  .filter-btn.active.f-low { background: var(--low-bg); border-color: var(--low-border); color: var(--low); }
-
-  /* ── Risk cards ── */
-  .risk-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .risk-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-    transition: border-color 0.2s;
-    animation: fadeIn 0.3s ease forwards;
-    opacity: 0;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .risk-card:hover { border-color: var(--border-strong); }
-  .risk-card.high { border-left: 3px solid var(--high); }
-  .risk-card.medium { border-left: 3px solid var(--medium); }
-  .risk-card.low { border-left: 3px solid var(--low); }
-  .risk-card.none { border-left: 3px solid var(--none); opacity: 0.6; }
-  .risk-card.hidden { display: none; }
-
-  .risk-card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .risk-id {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    flex-shrink: 0;
-    width: 28px;
-  }
-
-  .risk-level-badge {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .badge-high { background: var(--high-bg); color: var(--high); border: 1px solid var(--high-border); }
-  .badge-medium { background: var(--medium-bg); color: var(--medium); border: 1px solid var(--medium-border); }
-  .badge-low { background: var(--low-bg); color: var(--low); border: 1px solid var(--low-border); }
-  .badge-none { background: var(--none-bg); color: var(--none); border: 1px solid rgba(107,114,128,0.2); }
-
-  .risk-category-tag {
-    font-size: 11px;
-    color: var(--text-muted);
-    background: var(--surface2);
-    padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-  }
-
-  .risk-text-preview {
-    flex: 1;
-    font-size: 12px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .risk-chevron {
-    color: var(--text-dim);
-    font-size: 12px;
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-  .risk-card.expanded .risk-chevron { transform: rotate(90deg); }
-
-  .risk-card-body {
-    display: none;
-    padding: 0 16px 16px;
-    border-top: 1px solid var(--border);
-  }
-  .risk-card.expanded .risk-card-body { display: block; }
-
-  .risk-full-text {
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.7;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--border);
-    font-style: italic;
-    opacity: 0.85;
-  }
-
-  .risk-details {
-    padding-top: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .risk-detail-row {
-    display: flex;
-    gap: 12px;
-  }
-
-  .risk-detail-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    width: 110px;
-    flex-shrink: 0;
-    padding-top: 2px;
-  }
-
-  .risk-detail-value {
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.6;
-    flex: 1;
-  }
-
-  .rag-context {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.6;
-    font-family: var(--font-mono);
-    white-space: pre-wrap;
-  }
-
-  .recommendation-box {
-    background: rgba(16,185,129,0.05);
-    border: 1px solid rgba(16,185,129,0.15);
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.6;
-  }
-
-  /* ── Error ── */
-  .error-box {
-    background: var(--high-bg);
-    border: 1px solid var(--high-border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    font-size: 13px;
-    color: #fca5a5;
-    display: none;
-    margin-top: 12px;
-    line-height: 1.6;
-  }
-  .error-box.visible { display: block; }
-
-  /* ── Loading overlay ── */
-  .loading-steps {
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  .loading-steps.visible { display: flex; }
-
-  .loading-step {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    transition: color 0.3s;
-  }
-  .loading-step.active { color: var(--accent); }
-  .loading-step.done { color: var(--success); }
-
-  .step-indicator {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 1px solid currentColor;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    flex-shrink: 0;
-  }
-  .loading-step.active .step-indicator {
-    animation: pulse 1s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  /* Divider */
-  .chat-divider {
-    display: flex; align-items: center; gap: 12px;
-    margin: 32px 0 20px;
-    color: var(--text-muted);
-    font-size: 11px; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.08em;
-  }
-  .chat-divider::before, .chat-divider::after {
-    content: ''; flex: 1;
-    height: 1px; background: var(--border);
-  }
-
-  /* Chips */
-  .chat-chips {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    margin-bottom: 20px;
-  }
-  .chat-chip {
-    padding: 6px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 99px;
-    font-size: 12px; font-family: var(--font-body);
-    color: var(--text-muted);
-    cursor: pointer; transition: all 0.15s;
-  }
-  .chat-chip:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--accent-glow);
-  }
-
-  /* Message area */
-  .chat-messages {
-    display: flex; flex-direction: column; gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  /* Bubbles */
-  .chat-bubble {
-    max-width: 80%;
-    padding: 12px 16px;
-    border-radius: 12px;
-    font-size: 13px; line-height: 1.7;
-    animation: fadeIn 0.2s ease;
-  }
-  .chat-bubble.user {
-    align-self: flex-end;
-    background: var(--accent-glow);
-    border: 1px solid rgba(79,142,247,0.25);
-    color: var(--text);
-    border-bottom-right-radius: 4px;
-  }
-  .chat-bubble.assistant {
-    align-self: flex-start;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-bottom-left-radius: 4px;
-  }
-  .bubble-time {
-    font-size: 10px; font-family: var(--font-mono);
-    color: var(--text-dim); margin-top: 6px;
-  }
-
-  /* Links to risks inside messages */
-  .risk-ref {
-    display: inline-block;
-    font-family: var(--font-mono); font-size: 11px;
-    padding: 1px 6px; border-radius: 4px;
-    cursor: pointer; font-weight: 500;
-    transition: opacity 0.15s;
-  }
-  .risk-ref:hover { opacity: 0.75; }
-  .risk-ref.high {
-    background: var(--high-bg); color: var(--high);
-    border: 1px solid var(--high-border);
-  }
-  .risk-ref.medium {
-    background: var(--medium-bg); color: var(--medium);
-    border: 1px solid var(--medium-border);
-  }
-  .risk-ref.low {
-    background: var(--low-bg); color: var(--low);
-    border: 1px solid var(--low-border);
-  }
-
-  /* Print indicator */
-  .typing-bubble {
-    display: flex; align-items: center; gap: 4px;
-    padding: 14px 18px; width: fit-content;
-  }
-  .typing-bubble span {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--text-muted);
-    animation: typingDot 1.2s ease-in-out infinite;
-  }
-  .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-  .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes typingDot {
-    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-    30% { opacity: 1; transform: translateY(-5px); }
-  }
-
-  /* Input field */
-  .chat-input-wrap {
-    display: flex; align-items: flex-end; gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px; padding: 10px 12px;
-    transition: border-color 0.2s;
-  }
-  .chat-input-wrap:focus-within {
-    border-color: var(--accent);
-  }
-  .chat-input {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--text); font-family: var(--font-body); font-size: 13px;
-    line-height: 1.6; resize: none; min-height: 20px; max-height: 80px;
-    overflow-y: auto;
-  }
-  .chat-input::placeholder { color: var(--text-dim); }
-  .chat-send-btn {
-    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-    background: var(--accent); color: #fff; border: none;
-    font-size: 16px; cursor: pointer; transition: all 0.15s;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .chat-send-btn:hover:not(:disabled) { background: #3d7af0; }
-  .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* ── Responsive ── */
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
-    .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
-    .panel-right { padding: 20px; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexGuard — Анализ юридических документов</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #13161e;
+      --surface2: #1a1e28;
+      --border: rgba(255, 255, 255, 0.07);
+      --border-strong: rgba(255, 255, 255, 0.13);
+      --text: #e8eaf0;
+      --text-muted: #6b7280;
+      --text-dim: #4b5563;
+      --accent: #4f8ef7;
+      --accent-glow: rgba(79, 142, 247, 0.15);
+      --high: #ef4444;
+      --high-bg: rgba(239, 68, 68, 0.08);
+      --high-border: rgba(239, 68, 68, 0.2);
+      --medium: #f59e0b;
+      --medium-bg: rgba(245, 158, 11, 0.08);
+      --medium-border: rgba(245, 158, 11, 0.2);
+      --low: #3b82f6;
+      --low-bg: rgba(59, 130, 246, 0.08);
+      --low-border: rgba(59, 130, 246, 0.2);
+      --none: #6b7280;
+      --none-bg: rgba(107, 114, 128, 0.08);
+      --success: #10b981;
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body: 'Manrope', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    .status-dot.error {
+      background: var(--high);
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ── Left panel ── */
+    .panel-left {
+      border-right: 1px solid var(--border);
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .panel-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 1.5px dashed var(--border-strong);
+      border-radius: 12px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface);
+      position: relative;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .upload-zone input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 14px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      background: var(--surface2);
+    }
+
+    .upload-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .upload-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .file-selected {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .file-selected.visible {
+      display: flex;
+    }
+
+    .file-ext {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(79, 142, 247, 0.2);
+      flex-shrink: 0;
+    }
+
+    .file-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .file-remove {
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .file-remove:hover {
+      color: var(--high);
+    }
+
+    /* ── Analyze button ── */
+    .btn-analyze {
+      width: 100%;
+      padding: 13px 24px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.01em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-analyze:hover:not(:disabled) {
+      background: #3d7af0;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(79, 142, 247, 0.3);
+    }
+
+    .btn-analyze:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Progress ── */
+    .progress-wrap {
+      display: none;
+    }
+
+    .progress-wrap.visible {
+      display: block;
+    }
+
+    .progress-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-family: var(--font-mono);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    /* ── Info cards ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .info-card-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .info-card-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      font-family: var(--font-mono);
+    }
+
+    .info-card-value.high {
+      color: var(--high);
+    }
+
+    .info-card-value.medium {
+      color: var(--medium);
+    }
+
+    .info-card-value.accent {
+      color: var(--accent);
+    }
+
+    /* ── Score gauge ── */
+    .score-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+
+    .score-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .score-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--font-mono);
+    }
+
+    .score-value {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 500;
+    }
+
+    .score-bar {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .score-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ── Right panel ── */
+    .panel-right {
+      padding: 32px;
+      overflow-y: auto;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 16px;
+      color: var(--text-dim);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ── Results header ── */
+    .results-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 16px;
+    }
+
+    .results-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .results-filename {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-top: 4px;
+    }
+
+    .btn-export {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn-export:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .filter-btn.active {
+      background: var(--accent-glow);
+      border-color: rgba(79, 142, 247, 0.3);
+      color: var(--accent);
+    }
+
+    .filter-btn.active.f-high {
+      background: var(--high-bg);
+      border-color: var(--high-border);
+      color: var(--high);
+    }
+
+    .filter-btn.active.f-medium {
+      background: var(--medium-bg);
+      border-color: var(--medium-border);
+      color: var(--medium);
+    }
+
+    .filter-btn.active.f-low {
+      background: var(--low-bg);
+      border-color: var(--low-border);
+      color: var(--low);
+    }
+
+    /* ── Risk cards ── */
+    .risk-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .risk-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+      animation: fadeIn 0.3s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .risk-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .risk-card.high {
+      border-left: 3px solid var(--high);
+    }
+
+    .risk-card.medium {
+      border-left: 3px solid var(--medium);
+    }
+
+    .risk-card.low {
+      border-left: 3px solid var(--low);
+    }
+
+    .risk-card.none {
+      border-left: 3px solid var(--none);
+      opacity: 0.6;
+    }
+
+    .risk-card.hidden {
+      display: none;
+    }
+
+    .risk-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .risk-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      width: 28px;
+    }
+
+    .risk-level-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-high {
+      background: var(--high-bg);
+      color: var(--high);
+      border: 1px solid var(--high-border);
+    }
+
+    .badge-medium {
+      background: var(--medium-bg);
+      color: var(--medium);
+      border: 1px solid var(--medium-border);
+    }
+
+    .badge-low {
+      background: var(--low-bg);
+      color: var(--low);
+      border: 1px solid var(--low-border);
+    }
+
+    .badge-none {
+      background: var(--none-bg);
+      color: var(--none);
+      border: 1px solid rgba(107, 114, 128, 0.2);
+    }
+
+    .risk-category-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .risk-text-preview {
+      flex: 1;
+      font-size: 12px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .risk-chevron {
+      color: var(--text-dim);
+      font-size: 12px;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    .risk-card.expanded .risk-chevron {
+      transform: rotate(90deg);
+    }
+
+    .risk-card-body {
+      display: none;
+      padding: 0 16px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .risk-card.expanded .risk-card-body {
+      display: block;
+    }
+
+    .risk-full-text {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.7;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      font-style: italic;
+      opacity: 0.85;
+    }
+
+    .risk-details {
+      padding-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .risk-detail-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .risk-detail-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      width: 110px;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+
+    .risk-detail-value {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .rag-context {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      font-family: var(--font-mono);
+      white-space: pre-wrap;
+    }
+
+    .recommendation-box {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      background: var(--high-bg);
+      border: 1px solid var(--high-border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #fca5a5;
+      display: none;
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+
+    .error-box.visible {
+      display: block;
+    }
+
+    /* ── Loading overlay ── */
+    .loading-steps {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .loading-steps.visible {
+      display: flex;
+    }
+
+    .loading-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      transition: color 0.3s;
+    }
+
+    .loading-step.active {
+      color: var(--accent);
+    }
+
+    .loading-step.done {
+      color: var(--success);
+    }
+
+    .step-indicator {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid currentColor;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .loading-step.active .step-indicator {
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    /* Divider */
+    .chat-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 32px 0 20px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .chat-divider::before,
+    .chat-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Chips */
+    .chat-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .chat-chip {
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      font-size: 12px;
+      font-family: var(--font-body);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .chat-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    /* Message area */
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* Bubbles */
+    .chat-bubble {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.7;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: var(--accent-glow);
+      border: 1px solid rgba(79, 142, 247, 0.25);
+      color: var(--text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-bubble.assistant {
+      align-self: flex-start;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble-time {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* Links to risks inside messages */
+    .risk-ref {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+
+    .risk-ref:hover {
+      opacity: 0.75;
+    }
+
+    .risk-ref.high {
+      background: var(--high-bg);
+      color: var(--high);
+      border: 1px solid var(--high-border);
+    }
+
+    .risk-ref.medium {
+      background: var(--medium-bg);
+      color: var(--medium);
+      border: 1px solid var(--medium-border);
+    }
+
+    .risk-ref.low {
+      background: var(--low-bg);
+      color: var(--low);
+      border: 1px solid var(--low-border);
+    }
+
+    /* Print indicator */
+    .typing-bubble {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 14px 18px;
+      width: fit-content;
+    }
+
+    .typing-bubble span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typingDot 1.2s ease-in-out infinite;
+    }
+
+    .typing-bubble span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-bubble span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typingDot {
+
+      0%,
+      60%,
+      100% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+
+      30% {
+        opacity: 1;
+        transform: translateY(-5px);
+      }
+    }
+
+    /* Input field */
+    .chat-input-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input-wrap:focus-within {
+      border-color: var(--accent);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      line-height: 1.6;
+      resize: none;
+      min-height: 20px;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    .chat-input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .chat-send-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chat-send-btn:hover:not(:disabled) {
+      background: #3d7af0;
+    }
+
+    .chat-send-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-left {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .panel-right {
+        padding: 20px;
+      }
+    }
+  </style>
 </head>
+
 <body>
 
-<!-- Topbar -->
-<header class="topbar">
-  <div class="logo">
-    <div class="logo-icon">⚖</div>
-    LexGuard
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">⚖</div>
+      LexGuard
+    </div>
+    <div class="status-badge">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">проверка...</span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- Left panel -->
+    <aside class="panel-left">
+      <div>
+        <h1 class="panel-title">Анализ юридических<br>документов</h1>
+        <p class="panel-subtitle">Загрузите договор в формате PDF или DOCX — система выявит риски и предложит
+          рекомендации на основе ИИ + RAG.</p>
+      </div>
+
+      <!-- Upload -->
+      <div>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".pdf,.docx">
+          <div class="upload-icon">📄</div>
+          <span class="upload-label">Перетащите файл или нажмите</span>
+          <span class="upload-hint">PDF · DOCX · до 15 МБ</span>
+        </div>
+        <div class="file-selected" id="fileSelected">
+          <span class="file-ext" id="fileExt">PDF</span>
+          <span class="file-name" id="fileName"></span>
+          <span class="file-remove" id="fileRemove">✕</span>
+        </div>
+        <div class="error-box" id="errorBox"></div>
+      </div>
+
+      <!-- Analyze button -->
+      <button class="btn-analyze" id="analyzeBtn" disabled onclick="startAnalysis()">
+        Анализировать договор
+      </button>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-label">
+          <span id="progressLabel">Инициализация...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <!-- Loading steps -->
+      <div class="loading-steps" id="loadingSteps">
+        <div class="loading-step" id="step1">
+          <div class="step-indicator">1</div>
+          <span>Извлечение текста</span>
+        </div>
+        <div class="loading-step" id="step2">
+          <div class="step-indicator">2</div>
+          <span>Сегментация на фрагменты</span>
+        </div>
+        <div class="loading-step" id="step3">
+          <div class="step-indicator">3</div>
+          <span>Поиск норм в RAG-базе</span>
+        </div>
+        <div class="loading-step" id="step4">
+          <div class="step-indicator">4</div>
+          <span>Анализ через Gemma3</span>
+        </div>
+        <div class="loading-step" id="step5">
+          <div class="step-indicator">5</div>
+          <span>Формирование отчёта</span>
+        </div>
+      </div>
+
+      <!-- Summary stats (shown after analysis) -->
+      <div id="summarySection" style="display:none; flex-direction:column; gap:12px;">
+        <div class="info-grid">
+          <div class="info-card">
+            <div class="info-card-label">Фрагментов</div>
+            <div class="info-card-value accent" id="statTotal">0</div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-label">С рисками</div>
+            <div class="info-card-value" id="statRisky">0</div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-label">Высокий</div>
+            <div class="info-card-value high" id="statHigh">0</div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-label">Средний</div>
+            <div class="info-card-value medium" id="statMedium">0</div>
+          </div>
+        </div>
+        <div class="score-wrap">
+          <div class="score-header">
+            <span class="score-title">Индекс риска</span>
+            <span class="score-value" id="scoreValue">0.00</span>
+          </div>
+          <div class="score-bar">
+            <div class="score-fill" id="scoreFill"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right panel -->
+    <main class="panel-right" id="panelRight">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">⚖</div>
+        <div class="empty-title">Загрузите договор для анализа</div>
+        <div style="font-size:13px; max-width: 320px; line-height:1.7">
+          Система проверит каждый фрагмент на наличие рисков:<br>финансовых, правовых, операционных и интеллектуальных.
+        </div>
+      </div>
+
+      <div id="resultsSection" style="display:none;">
+        <div class="results-header">
+          <div>
+            <div class="results-title">Результаты анализа</div>
+            <div class="results-filename" id="resultsFilename"></div>
+          </div>
+          <button class="btn-export" onclick="exportJSON()">Экспорт JSON</button>
+        </div>
+
+        <div class="filters">
+          <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Все</button>
+          <button class="filter-btn f-high" data-filter="high" onclick="setFilter('high', this)">Высокий</button>
+          <button class="filter-btn f-medium" data-filter="medium" onclick="setFilter('medium', this)">Средний</button>
+          <button class="filter-btn f-low" data-filter="low" onclick="setFilter('low', this)">Низкий</button>
+          <button class="filter-btn" data-filter="none" onclick="setFilter('none', this)">Без риска</button>
+        </div>
+
+        <div class="risk-list" id="riskList"></div>
+      </div>
+
+      <div id="chatSection" style="display:none">
+        <div class="chat-divider">
+          <span>AI assistant</span>
+        </div>
+
+        <div class="chat-chips" id="chatChips"></div>
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <div class="chat-bubble assistant typing-bubble" id="typingIndicator" style="display:none">
+          <span></span><span></span><span></span>
+        </div>
+
+        <div class="chat-input-wrap">
+          <textarea id="chatInput" class="chat-input" placeholder="Ask a question about the contract..." rows="1"
+            maxlength="2000"></textarea>
+          <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">→</button>
+        </div>
+      </div>
+    </main>
   </div>
-  <div class="status-badge">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">проверка...</span>
-  </div>
-</header>
 
-<div class="layout">
+  <script>
+    const API = '/api/v1';
+    let currentFile = null;
+    let currentResult = null;
+    let activeFilter = 'all';
+    let chatSessionId = null;
+    let chatWaiting = false;
+    let chatChipsVisible = true;
 
-  <!-- Left panel -->
-  <aside class="panel-left">
-    <div>
-      <h1 class="panel-title">Анализ юридических<br>документов</h1>
-      <p class="panel-subtitle">Загрузите договор в формате PDF или DOCX — система выявит риски и предложит рекомендации на основе Gemma3 + RAG.</p>
-    </div>
-
-    <!-- Upload -->
-    <div>
-      <div class="upload-zone" id="uploadZone">
-        <input type="file" id="fileInput" accept=".pdf,.docx">
-        <div class="upload-icon">📄</div>
-        <span class="upload-label">Перетащите файл или нажмите</span>
-        <span class="upload-hint">PDF · DOCX · до 15 МБ</span>
-      </div>
-      <div class="file-selected" id="fileSelected">
-        <span class="file-ext" id="fileExt">PDF</span>
-        <span class="file-name" id="fileName"></span>
-        <span class="file-remove" id="fileRemove">✕</span>
-      </div>
-      <div class="error-box" id="errorBox"></div>
-    </div>
-
-    <!-- Analyze button -->
-    <button class="btn-analyze" id="analyzeBtn" disabled onclick="startAnalysis()">
-      Анализировать договор
-    </button>
-
-    <!-- Progress -->
-    <div class="progress-wrap" id="progressWrap">
-      <div class="progress-label">
-        <span id="progressLabel">Инициализация...</span>
-        <span id="progressPct">0%</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progressFill"></div>
-      </div>
-    </div>
-
-    <!-- Loading steps -->
-    <div class="loading-steps" id="loadingSteps">
-      <div class="loading-step" id="step1">
-        <div class="step-indicator">1</div>
-        <span>Извлечение текста</span>
-      </div>
-      <div class="loading-step" id="step2">
-        <div class="step-indicator">2</div>
-        <span>Сегментация на фрагменты</span>
-      </div>
-      <div class="loading-step" id="step3">
-        <div class="step-indicator">3</div>
-        <span>Поиск норм в RAG-базе</span>
-      </div>
-      <div class="loading-step" id="step4">
-        <div class="step-indicator">4</div>
-        <span>Анализ через Gemma3</span>
-      </div>
-      <div class="loading-step" id="step5">
-        <div class="step-indicator">5</div>
-        <span>Формирование отчёта</span>
-      </div>
-    </div>
-
-    <!-- Summary stats (shown after analysis) -->
-    <div id="summarySection" style="display:none; flex-direction:column; gap:12px;">
-      <div class="info-grid">
-        <div class="info-card">
-          <div class="info-card-label">Фрагментов</div>
-          <div class="info-card-value accent" id="statTotal">0</div>
-        </div>
-        <div class="info-card">
-          <div class="info-card-label">С рисками</div>
-          <div class="info-card-value" id="statRisky">0</div>
-        </div>
-        <div class="info-card">
-          <div class="info-card-label">Высокий</div>
-          <div class="info-card-value high" id="statHigh">0</div>
-        </div>
-        <div class="info-card">
-          <div class="info-card-label">Средний</div>
-          <div class="info-card-value medium" id="statMedium">0</div>
-        </div>
-      </div>
-      <div class="score-wrap">
-        <div class="score-header">
-          <span class="score-title">Индекс риска</span>
-          <span class="score-value" id="scoreValue">0.00</span>
-        </div>
-        <div class="score-bar">
-          <div class="score-fill" id="scoreFill"></div>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Right panel -->
-  <main class="panel-right" id="panelRight">
-    <div class="empty-state" id="emptyState">
-      <div class="empty-icon">⚖</div>
-      <div class="empty-title">Загрузите договор для анализа</div>
-      <div style="font-size:13px; max-width: 320px; line-height:1.7">
-        Система проверит каждый фрагмент на наличие рисков:<br>финансовых, правовых, операционных и интеллектуальных.
-      </div>
-    </div>
-
-    <div id="resultsSection" style="display:none;">
-      <div class="results-header">
-        <div>
-          <div class="results-title">Результаты анализа</div>
-          <div class="results-filename" id="resultsFilename"></div>
-        </div>
-        <button class="btn-export" onclick="exportJSON()">Экспорт JSON</button>
-      </div>
-
-      <div class="filters">
-        <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Все</button>
-        <button class="filter-btn f-high" data-filter="high" onclick="setFilter('high', this)">Высокий</button>
-        <button class="filter-btn f-medium" data-filter="medium" onclick="setFilter('medium', this)">Средний</button>
-        <button class="filter-btn f-low" data-filter="low" onclick="setFilter('low', this)">Низкий</button>
-        <button class="filter-btn" data-filter="none" onclick="setFilter('none', this)">Без риска</button>
-      </div>
-
-      <div class="risk-list" id="riskList"></div>
-    </div>
-
-    <div id="chatSection" style="display:none">
-      <div class="chat-divider">
-        <span>AI assistant</span>
-      </div>
-
-      <div class="chat-chips" id="chatChips"></div>
-      <div class="chat-messages" id="chatMessages"></div>
-
-      <div class="chat-bubble assistant typing-bubble" id="typingIndicator" style="display:none">
-        <span></span><span></span><span></span>
-      </div>
-
-      <div class="chat-input-wrap">
-        <textarea
-          id="chatInput"
-          class="chat-input"
-          placeholder="Ask a question about the contract..."
-          rows="1"
-          maxlength="2000"
-        ></textarea>
-        <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMessage()">→</button>
-      </div>
-    </div>
-  </main>
-</div>
-
-<script>
-const API = '/api/v1';
-let currentFile = null;
-let currentResult = null;
-let activeFilter = 'all';
-let chatSessionId = null;
-let chatWaiting = false;
-let chatChipsVisible = true;
-
-// ── Status check ──
-async function checkStatus() {
-  try {
-    const r = await fetch(`${API}/status`);
-    const d = await r.json();
-    const dot = document.getElementById('statusDot');
-    const txt = document.getElementById('statusText');
-    if (d.ollama === 'running' && d.model_available) {
-      dot.className = 'status-dot online';
-      txt.textContent = `gemma3 · ${d.rag?.norms_count || 0} норм в RAG`;
-    } else if (d.ollama === 'running') {
-      dot.className = 'status-dot';
-      txt.textContent = 'ollama запущен, модель не найдена';
-    } else {
-      dot.className = 'status-dot error';
-      txt.textContent = 'ollama недоступен';
-    }
-  } catch {
-    document.getElementById('statusDot').className = 'status-dot error';
-    document.getElementById('statusText').textContent = 'сервер недоступен';
-  }
-}
-
-// ── File handling ──
-document.getElementById('fileInput').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (file) selectFile(file);
-});
-
-const zone = document.getElementById('uploadZone');
-zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-zone.addEventListener('drop', e => {
-  e.preventDefault(); zone.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file) selectFile(file);
-});
-
-document.getElementById('fileRemove').addEventListener('click', () => {
-  currentFile = null;
-  document.getElementById('fileInput').value = '';
-  document.getElementById('fileSelected').classList.remove('visible');
-  document.getElementById('uploadZone').style.display = 'block';
-  document.getElementById('analyzeBtn').disabled = true;
-  hideError();
-});
-
-function selectFile(file) {
-  const allowed = ['.pdf', '.docx'];
-  const ext = '.' + file.name.split('.').pop().toLowerCase();
-  if (!allowed.includes(ext)) {
-    showError('Поддерживаются только PDF и DOCX файлы');
-    return;
-  }
-  if (file.size > 15 * 1024 * 1024) {
-    showError('Файл слишком большой (максимум 15 МБ)');
-    return;
-  }
-  currentFile = file;
-  hideError();
-  document.getElementById('uploadZone').style.display = 'none';
-  const sel = document.getElementById('fileSelected');
-  sel.classList.add('visible');
-  document.getElementById('fileExt').textContent = ext.replace('.', '').toUpperCase();
-  document.getElementById('fileName').textContent = file.name;
-  document.getElementById('analyzeBtn').disabled = false;
-}
-
-// ── Analysis ──
-async function startAnalysis() {
-  if (!currentFile) return;
-  hideError();
-  setLoading(true);
-
-  const formData = new FormData();
-  formData.append('file', currentFile);
-
-  animateSteps();
-
-  try {
-    const r = await fetch(`${API}/analyze`, { method: 'POST', body: formData });
-    if (!r.ok) {
-      let message = 'Ошибка сервера';
-      const ct = r.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        const err = await r.json();
-        message = err.detail || message;
-      } else {
-        const text = (await r.text()).trim();
-        if (text) message = text;
+    // ── Status check ──
+    async function checkStatus() {
+      try {
+        const r = await fetch(`${API}/status`);
+        const d = await r.json();
+        const dot = document.getElementById('statusDot');
+        const txt = document.getElementById('statusText');
+        if (d.ollama === 'running' && d.model_available) {
+          dot.className = 'status-dot online';
+          txt.textContent = `gemma3 · ${d.rag?.norms_count || 0} норм в RAG`;
+        } else if (d.ollama === 'running') {
+          dot.className = 'status-dot';
+          txt.textContent = 'ollama запущен, модель не найдена';
+        } else {
+          dot.className = 'status-dot error';
+          txt.textContent = 'ollama недоступен';
+        }
+      } catch {
+        document.getElementById('statusDot').className = 'status-dot error';
+        document.getElementById('statusText').textContent = 'сервер недоступен';
       }
-      throw new Error(message);
     }
-    currentResult = await r.json();
-    renderResults(currentResult);
-  } catch(e) {
-    showError(e.message);
-  } finally {
-    setLoading(false);
-  }
-}
 
-function setLoading(on) {
-  document.getElementById('analyzeBtn').disabled = on;
-  document.getElementById('progressWrap').classList.toggle('visible', on);
-  document.getElementById('loadingSteps').classList.toggle('visible', on);
-  if (!on) {
-    document.getElementById('progressFill').style.width = '0%';
-    document.querySelectorAll('.loading-step').forEach(s => s.className = 'loading-step');
-  }
-}
+    // ── File handling ──
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) selectFile(file);
+    });
 
-function animateSteps() {
-  const steps = ['step1','step2','step3','step4','step5'];
-  const labels = ['Извлечение текста...','Сегментация...','RAG-поиск...','Анализ Gemma3...','Готово'];
-  const pcts = [10, 25, 45, 85, 100];
-  let i = 0;
+    const zone = document.getElementById('uploadZone');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) selectFile(file);
+    });
 
-  function next() {
-    if (i > 0) document.getElementById(steps[i-1]).className = 'loading-step done';
-    if (i < steps.length) {
-      document.getElementById(steps[i]).className = 'loading-step active';
-      setProgress(pcts[i], labels[i]);
-      i++;
-      setTimeout(next, i < 5 ? 1200 + Math.random() * 800 : 0);
+    document.getElementById('fileRemove').addEventListener('click', () => {
+      currentFile = null;
+      document.getElementById('fileInput').value = '';
+      document.getElementById('fileSelected').classList.remove('visible');
+      document.getElementById('uploadZone').style.display = 'block';
+      document.getElementById('analyzeBtn').disabled = true;
+      hideError();
+    });
+
+    function selectFile(file) {
+      const allowed = ['.pdf', '.docx'];
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      if (!allowed.includes(ext)) {
+        showError('Поддерживаются только PDF и DOCX файлы');
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        showError('Файл слишком большой (максимум 15 МБ)');
+        return;
+      }
+      currentFile = file;
+      hideError();
+      document.getElementById('uploadZone').style.display = 'none';
+      const sel = document.getElementById('fileSelected');
+      sel.classList.add('visible');
+      document.getElementById('fileExt').textContent = ext.replace('.', '').toUpperCase();
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('analyzeBtn').disabled = false;
     }
-  }
-  next();
-}
 
-function setProgress(pct, label) {
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressLabel').textContent = label;
-  document.getElementById('progressPct').textContent = pct + '%';
-}
+    // ── Analysis ──
+    async function startAnalysis() {
+      if (!currentFile) return;
+      hideError();
+      setLoading(true);
 
-// ── Render results ──
-function renderResults(data) {
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('resultsSection').style.display = 'block';
-  document.getElementById('summarySection').style.display = 'flex';
+      const formData = new FormData();
+      formData.append('file', currentFile);
 
-  // Summary
-  const s = data.summary;
-  document.getElementById('statTotal').textContent = s.total_segments;
-  document.getElementById('statRisky').textContent = s.risky_segments;
-  document.getElementById('statHigh').textContent = s.high_risk_count;
-  document.getElementById('statMedium').textContent = s.medium_risk_count;
-  document.getElementById('resultsFilename').textContent = data.filename;
+      animateSteps();
 
-  // Score
-  const score = s.risk_score;
-  const scoreEl = document.getElementById('scoreValue');
-  scoreEl.textContent = score.toFixed(2);
-  const fill = document.getElementById('scoreFill');
-  fill.style.width = (score * 100) + '%';
-  if (score > 0.6) { fill.style.background = 'var(--high)'; scoreEl.style.color = 'var(--high)'; }
-  else if (score > 0.3) { fill.style.background = 'var(--medium)'; scoreEl.style.color = 'var(--medium)'; }
-  else { fill.style.background = 'var(--accent)'; scoreEl.style.color = 'var(--accent)'; }
+      try {
+        const r = await fetch(`${API}/analyze`, { method: 'POST', body: formData });
+        if (!r.ok) {
+          let message = 'Ошибка сервера';
+          const ct = r.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const err = await r.json();
+            message = err.detail || message;
+          } else {
+            const text = (await r.text()).trim();
+            if (text) message = text;
+          }
+          throw new Error(message);
+        }
+        currentResult = await r.json();
+        renderResults(currentResult);
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
 
-  // Risk list
-  const list = document.getElementById('riskList');
-  list.innerHTML = '';
-  data.risks.forEach((risk, idx) => {
-    const card = createRiskCard(risk, idx);
-    list.appendChild(card);
-  });
+    function setLoading(on) {
+      document.getElementById('analyzeBtn').disabled = on;
+      document.getElementById('progressWrap').classList.toggle('visible', on);
+      document.getElementById('loadingSteps').classList.toggle('visible', on);
+      if (!on) {
+        document.getElementById('progressFill').style.width = '0%';
+        document.querySelectorAll('.loading-step').forEach(s => s.className = 'loading-step');
+      }
+    }
 
-  applyFilter(activeFilter);
-  chatInit(data.analysis_id, data.risks);
-}
+    function animateSteps() {
+      const steps = ['step1', 'step2', 'step3', 'step4', 'step5'];
+      const labels = ['Извлечение текста...', 'Сегментация...', 'RAG-поиск...', 'Анализ Gemma3...', 'Готово'];
+      const pcts = [10, 25, 45, 85, 100];
+      let i = 0;
 
-function createRiskCard(risk, idx) {
-  const card = document.createElement('div');
-  card.className = `risk-card ${risk.risk_level}`;
-  card.style.animationDelay = (idx * 0.04) + 's';
-  card.dataset.level = risk.risk_level;
+      function next() {
+        if (i > 0) document.getElementById(steps[i - 1]).className = 'loading-step done';
+        if (i < steps.length) {
+          document.getElementById(steps[i]).className = 'loading-step active';
+          setProgress(pcts[i], labels[i]);
+          i++;
+          setTimeout(next, i < 5 ? 1200 + Math.random() * 800 : 0);
+        }
+      }
+      next();
+    }
 
-  const levelLabels = { high: 'Высокий', medium: 'Средний', low: 'Низкий', none: 'Норма' };
-  const preview = risk.text.length > 80 ? risk.text.slice(0, 80) + '…' : risk.text;
+    function setProgress(pct, label) {
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent = label;
+      document.getElementById('progressPct').textContent = pct + '%';
+    }
 
-  card.innerHTML = `
+    // ── Render results ──
+    function renderResults(data) {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('resultsSection').style.display = 'block';
+      document.getElementById('summarySection').style.display = 'flex';
+
+      // Summary
+      const s = data.summary;
+      document.getElementById('statTotal').textContent = s.total_segments;
+      document.getElementById('statRisky').textContent = s.risky_segments;
+      document.getElementById('statHigh').textContent = s.high_risk_count;
+      document.getElementById('statMedium').textContent = s.medium_risk_count;
+      document.getElementById('resultsFilename').textContent = data.filename;
+
+      // Score
+      const score = s.risk_score;
+      const scoreEl = document.getElementById('scoreValue');
+      scoreEl.textContent = score.toFixed(2);
+      const fill = document.getElementById('scoreFill');
+      fill.style.width = (score * 100) + '%';
+      if (score > 0.6) { fill.style.background = 'var(--high)'; scoreEl.style.color = 'var(--high)'; }
+      else if (score > 0.3) { fill.style.background = 'var(--medium)'; scoreEl.style.color = 'var(--medium)'; }
+      else { fill.style.background = 'var(--accent)'; scoreEl.style.color = 'var(--accent)'; }
+
+      // Risk list
+      const list = document.getElementById('riskList');
+      list.innerHTML = '';
+      data.risks.forEach((risk, idx) => {
+        const card = createRiskCard(risk, idx);
+        list.appendChild(card);
+      });
+
+      applyFilter(activeFilter);
+      chatInit(data.analysis_id, data.risks);
+    }
+
+    function createRiskCard(risk, idx) {
+      const card = document.createElement('div');
+      card.className = `risk-card ${risk.risk_level}`;
+      card.style.animationDelay = (idx * 0.04) + 's';
+      card.dataset.level = risk.risk_level;
+
+      const levelLabels = { high: 'Высокий', medium: 'Средний', low: 'Низкий', none: 'Норма' };
+      const preview = risk.text.length > 80 ? risk.text.slice(0, 80) + '…' : risk.text;
+
+      card.innerHTML = `
     <div class="risk-card-header" onclick="toggleCard(this.parentElement)">
       <span class="risk-id">#${risk.segment_id}</span>
       <span class="risk-level-badge badge-${risk.risk_level}">${levelLabels[risk.risk_level]}</span>
@@ -1197,249 +1418,250 @@ function createRiskCard(risk, idx) {
       </div>
     </div>
   `;
-  return card;
-}
-
-function toggleCard(card) {
-  card.classList.toggle('expanded');
-}
-
-// ── Filters ──
-function setFilter(filter, btn) {
-  activeFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  applyFilter(filter);
-}
-
-function applyFilter(filter) {
-  document.querySelectorAll('.risk-card').forEach(card => {
-    const level = card.dataset.level;
-    card.classList.toggle('hidden', filter !== 'all' && level !== filter);
-  });
-}
-
-async function chatInit(analysisId, risks) {
-  chatSessionId = null;
-  chatWaiting = false;
-  chatChipsVisible = true;
-
-  const messages = document.getElementById('chatMessages');
-  const input = document.getElementById('chatInput');
-  const chips = document.getElementById('chatChips');
-  const typing = document.getElementById('typingIndicator');
-
-  messages.innerHTML = '';
-  chips.style.display = 'flex';
-  chips.innerHTML = '';
-  input.value = '';
-  chatAutoResize(input);
-  typing.style.display = 'none';
-  document.getElementById('chatSection').style.display = 'block';
-  chatSetInputState(false);
-  chatRenderChips(risks);
-
-  try {
-    const r = await fetch(`${API}/chat/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ analysis_id: analysisId })
-    });
-    if (!r.ok) throw new Error("Couldn't create a session");
-    const data = await r.json();
-    chatSessionId = data.session_id;
-    chatSetInputState(true);
-
-    const riskyCount = risks.filter(x => x.is_risky).length;
-    const highCount = risks.filter(x => x.risk_level === 'high').length;
-    const welcome = `Контракт проанализирован. Найдено рисков: **${riskyCount}**`
-      + (highCount > 0 ? `, из них высоких: **${highCount}**` : '')
-      + '. Задайте любой вопрос по документу.';
-    chatAppendBubble('assistant', welcome);
-  } catch (e) {
-    chatAppendBubble('assistant', 'Chat temporarily unavailable: ' + e.message, true);
-  }
-}
-
-function chatRenderChips(risks) {
-  const container = document.getElementById('chatChips');
-  container.innerHTML = '';
-  const chips = [];
-
-  const highRisks = risks.filter(r => r.risk_level === 'high').slice(0, 2);
-  highRisks.forEach(r => chips.push(`Объясни подробнее риск #${r.segment_id}`));
-  chips.push('Какие пункты нужно переписать в первую очередь?');
-  chips.push('Предложи безопасную формулировку');
-  if (risks.filter(r => r.is_risky).length > 2) chips.push('Есть ли противоречия в договоре?');
-
-  chips.slice(0, 4).forEach(text => {
-    const btn = document.createElement('button');
-    btn.className = 'chat-chip';
-    btn.textContent = text;
-    btn.onclick = () => chatSendQuick(text);
-    container.appendChild(btn);
-  });
-}
-
-function chatSendQuick(text) {
-  document.getElementById('chatInput').value = text;
-  chatAutoResize(document.getElementById('chatInput'));
-  sendChatMessage();
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chatInput');
-  const content = input.value.trim();
-  if (!content || content.length > 2000) return;
-  if (!chatSessionId || chatWaiting) return;
-
-  if (chatChipsVisible) {
-    document.getElementById('chatChips').style.display = 'none';
-    chatChipsVisible = false;
-  }
-
-  input.value = '';
-  chatAutoResize(input);
-  chatAppendBubble('user', content);
-
-  chatWaiting = true;
-  chatSetInputState(false);
-  document.getElementById('typingIndicator').style.display = 'flex';
-  scrollChatToBottom();
-
-  try {
-    const r = await fetch(`${API}/chat/session/${chatSessionId}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content })
-    });
-    if (!r.ok) {
-      let msg = 'Ошибка чата';
-      const ct = r.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        const err = await r.json();
-        msg = err.detail || msg;
-      } else {
-        const txt = (await r.text()).trim();
-        if (txt) msg = txt;
-      }
-      throw new Error(msg);
+      return card;
     }
-    const data = await r.json();
-    chatAppendBubble('assistant', data.content || '');
-  } catch (e) {
-    chatAppendBubble('assistant', 'Ошибка чата: ' + e.message, true);
-  } finally {
-    chatWaiting = false;
-    document.getElementById('typingIndicator').style.display = 'none';
-    chatSetInputState(true);
-    input.focus();
-  }
-}
 
-function chatAppendBubble(role, text, isError = false) {
-  const messages = document.getElementById('chatMessages');
-  const bubble = document.createElement('div');
-  bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'assistant'}`;
-  if (isError && role !== 'user') bubble.style.borderColor = 'var(--high-border)';
+    function toggleCard(card) {
+      card.classList.toggle('expanded');
+    }
 
-  const textNode = document.createElement('div');
-  textNode.innerHTML = chatFormatText(text);
-  bubble.appendChild(textNode);
+    // ── Filters ──
+    function setFilter(filter, btn) {
+      activeFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilter(filter);
+    }
 
-  const time = document.createElement('div');
-  time.className = 'bubble-time';
-  time.textContent = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  bubble.appendChild(time);
+    function applyFilter(filter) {
+      document.querySelectorAll('.risk-card').forEach(card => {
+        const level = card.dataset.level;
+        card.classList.toggle('hidden', filter !== 'all' && level !== filter);
+      });
+    }
 
-  messages.appendChild(bubble);
-  scrollChatToBottom();
-}
+    async function chatInit(analysisId, risks) {
+      chatSessionId = null;
+      chatWaiting = false;
+      chatChipsVisible = true;
 
-function chatFormatText(text) {
-  let html = escapeHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
+      const messages = document.getElementById('chatMessages');
+      const input = document.getElementById('chatInput');
+      const chips = document.getElementById('chatChips');
+      const typing = document.getElementById('typingIndicator');
 
-  html = html.replace(/#(\d+)/g, (_, id) => {
-    const risk = (currentResult?.risks || []).find(r => Number(r.segment_id) === Number(id));
-    const lvl = risk ? risk.risk_level : 'low';
-    return `<span class="risk-ref ${lvl}" onclick="scrollToRisk(${id})">#${id}</span>`;
-  });
-  return html;
-}
+      messages.innerHTML = '';
+      chips.style.display = 'flex';
+      chips.innerHTML = '';
+      input.value = '';
+      chatAutoResize(input);
+      typing.style.display = 'none';
+      document.getElementById('chatSection').style.display = 'block';
+      chatSetInputState(false);
+      chatRenderChips(risks);
 
-function scrollToRisk(segmentId) {
-  const cards = Array.from(document.querySelectorAll('.risk-card'));
-  const target = cards.find(c => {
-    const idEl = c.querySelector('.risk-id');
-    return idEl && idEl.textContent === `#${segmentId}`;
-  });
-  if (!target) return;
-  if (!target.classList.contains('expanded')) target.classList.add('expanded');
-  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
+      try {
+        const r = await fetch(`${API}/chat/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis_id: analysisId })
+        });
+        if (!r.ok) throw new Error("Couldn't create a session");
+        const data = await r.json();
+        chatSessionId = data.session_id;
+        chatSetInputState(true);
 
-function chatSetInputState(enabled) {
-  const input = document.getElementById('chatInput');
-  const btn = document.getElementById('chatSendBtn');
-  input.disabled = !enabled;
-  btn.disabled = !enabled;
-}
+        const riskyCount = risks.filter(x => x.is_risky).length;
+        const highCount = risks.filter(x => x.risk_level === 'high').length;
+        const welcome = `Контракт проанализирован. Найдено рисков: **${riskyCount}**`
+          + (highCount > 0 ? `, из них высоких: **${highCount}**` : '')
+          + '. Задайте любой вопрос по документу.';
+        chatAppendBubble('assistant', welcome);
+      } catch (e) {
+        chatAppendBubble('assistant', 'Chat temporarily unavailable: ' + e.message, true);
+      }
+    }
 
-function chatAutoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 80) + 'px';
-}
+    function chatRenderChips(risks) {
+      const container = document.getElementById('chatChips');
+      container.innerHTML = '';
+      const chips = [];
 
-function scrollChatToBottom() {
-  const panel = document.getElementById('panelRight');
-  panel.scrollTop = panel.scrollHeight;
-}
+      const highRisks = risks.filter(r => r.risk_level === 'high').slice(0, 2);
+      highRisks.forEach(r => chips.push(`Объясни подробнее риск #${r.segment_id}`));
+      chips.push('Какие пункты нужно переписать в первую очередь?');
+      chips.push('Предложи безопасную формулировку');
+      if (risks.filter(r => r.is_risky).length > 2) chips.push('Есть ли противоречия в договоре?');
 
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+      chips.slice(0, 4).forEach(text => {
+        const btn = document.createElement('button');
+        btn.className = 'chat-chip';
+        btn.textContent = text;
+        btn.onclick = () => chatSendQuick(text);
+        container.appendChild(btn);
+      });
+    }
 
-// ── Export ──
-function exportJSON() {
-  if (!currentResult) return;
-  const blob = new Blob([JSON.stringify(currentResult, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `analysis_${currentResult.analysis_id.slice(0,8)}.json`;
-  a.click();
-}
+    function chatSendQuick(text) {
+      document.getElementById('chatInput').value = text;
+      chatAutoResize(document.getElementById('chatInput'));
+      sendChatMessage();
+    }
 
-// ── Helpers ──
-function showError(msg) {
-  const box = document.getElementById('errorBox');
-  box.textContent = msg;
-  box.classList.add('visible');
-}
+    async function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const content = input.value.trim();
+      if (!content || content.length > 2000) return;
+      if (!chatSessionId || chatWaiting) return;
 
-function hideError() {
-  document.getElementById('errorBox').classList.remove('visible');
-}
+      if (chatChipsVisible) {
+        document.getElementById('chatChips').style.display = 'none';
+        chatChipsVisible = false;
+      }
 
-document.getElementById('chatInput').addEventListener('input', e => {
-  chatAutoResize(e.target);
-});
-document.getElementById('chatInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendChatMessage();
-  }
-});
+      input.value = '';
+      chatAutoResize(input);
+      chatAppendBubble('user', content);
 
-// Init
-checkStatus();
-setInterval(checkStatus, 30000);
-</script>
+      chatWaiting = true;
+      chatSetInputState(false);
+      document.getElementById('typingIndicator').style.display = 'flex';
+      scrollChatToBottom();
+
+      try {
+        const r = await fetch(`${API}/chat/session/${chatSessionId}/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        if (!r.ok) {
+          let msg = 'Ошибка чата';
+          const ct = r.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const err = await r.json();
+            msg = err.detail || msg;
+          } else {
+            const txt = (await r.text()).trim();
+            if (txt) msg = txt;
+          }
+          throw new Error(msg);
+        }
+        const data = await r.json();
+        chatAppendBubble('assistant', data.content || '');
+      } catch (e) {
+        chatAppendBubble('assistant', 'Ошибка чата: ' + e.message, true);
+      } finally {
+        chatWaiting = false;
+        document.getElementById('typingIndicator').style.display = 'none';
+        chatSetInputState(true);
+        input.focus();
+      }
+    }
+
+    function chatAppendBubble(role, text, isError = false) {
+      const messages = document.getElementById('chatMessages');
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${role === 'user' ? 'user' : 'assistant'}`;
+      if (isError && role !== 'user') bubble.style.borderColor = 'var(--high-border)';
+
+      const textNode = document.createElement('div');
+      textNode.innerHTML = chatFormatText(text);
+      bubble.appendChild(textNode);
+
+      const time = document.createElement('div');
+      time.className = 'bubble-time';
+      time.textContent = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      bubble.appendChild(time);
+
+      messages.appendChild(bubble);
+      scrollChatToBottom();
+    }
+
+    function chatFormatText(text) {
+      let html = escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+
+      html = html.replace(/#(\d+)/g, (_, id) => {
+        const risk = (currentResult?.risks || []).find(r => Number(r.segment_id) === Number(id));
+        const lvl = risk ? risk.risk_level : 'low';
+        return `<span class="risk-ref ${lvl}" onclick="scrollToRisk(${id})">#${id}</span>`;
+      });
+      return html;
+    }
+
+    function scrollToRisk(segmentId) {
+      const cards = Array.from(document.querySelectorAll('.risk-card'));
+      const target = cards.find(c => {
+        const idEl = c.querySelector('.risk-id');
+        return idEl && idEl.textContent === `#${segmentId}`;
+      });
+      if (!target) return;
+      if (!target.classList.contains('expanded')) target.classList.add('expanded');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function chatSetInputState(enabled) {
+      const input = document.getElementById('chatInput');
+      const btn = document.getElementById('chatSendBtn');
+      input.disabled = !enabled;
+      btn.disabled = !enabled;
+    }
+
+    function chatAutoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 80) + 'px';
+    }
+
+    function scrollChatToBottom() {
+      const panel = document.getElementById('panelRight');
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ── Export ──
+    function exportJSON() {
+      if (!currentResult) return;
+      const blob = new Blob([JSON.stringify(currentResult, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `analysis_${currentResult.analysis_id.slice(0, 8)}.json`;
+      a.click();
+    }
+
+    // ── Helpers ──
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.classList.add('visible');
+    }
+
+    function hideError() {
+      document.getElementById('errorBox').classList.remove('visible');
+    }
+
+    document.getElementById('chatInput').addEventListener('input', e => {
+      chatAutoResize(e.target);
+    });
+    document.getElementById('chatInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    // Init
+    checkStatus();
+    setInterval(checkStatus, 30000);
+  </script>
 </body>
+
 </html>
