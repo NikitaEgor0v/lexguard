@@ -6,6 +6,7 @@ import time
 from uuid import UUID
 
 import requests
+from sqlalchemy.orm import Session as DBSession
 
 from config.model_registry import ModelConfig
 from models.chat_schemas import ChatMessageResponse, ChatRole, ChatSession, ChatSessionResponse
@@ -30,48 +31,48 @@ def _session_to_response(session: ChatSession) -> ChatSessionResponse:
 class ChatService:
     def __init__(
         self,
-        repository: ChatRepository,
         context_builder: ChatContextBuilder,
         analyzer: AnalyzerService,
         model_name: str,
         model_config: ModelConfig,
     ):
-        self.repository = repository
         self.context_builder = context_builder
         self.analyzer = analyzer
         self.model_name = model_name
         self.model_config = model_config
 
-    def create_session(self, analysis_id: str) -> ChatSessionResponse:
+    def create_session(
+        self, db: DBSession, analysis_id: str, user_id: UUID | None = None,
+    ) -> ChatSessionResponse:
         """Create chat session for existing analysis."""
-        analysis = self.analyzer.get_result(analysis_id)
+        analysis = self.analyzer.get_result(analysis_id, db=db)
         if analysis is None:
             raise ValueError("Analysis not found")
-        session = self.repository.create_session(analysis_id)
+        session = ChatRepository.create_session(db, analysis_id, user_id=user_id)
         logger.info("Chat session created: %s for analysis %s", session.id, analysis_id)
         return _session_to_response(session)
 
-    def get_session(self, session_id: UUID) -> ChatSessionResponse:
+    def get_session(self, db: DBSession, session_id: UUID) -> ChatSessionResponse:
         """Return current chat session with history."""
-        session = self.repository.get_session(session_id)
+        session = ChatRepository.get_session(db, session_id)
         return _session_to_response(session)
 
-    def send_message(self, session_id: UUID, content: str) -> ChatMessageResponse:
+    def send_message(self, db: DBSession, session_id: UUID, content: str) -> ChatMessageResponse:
         """Store user message, generate assistant answer, and return it."""
-        session = self.repository.get_session(session_id)
-        analysis = self.analyzer.get_result(session.analysis_id)
+        session = ChatRepository.get_session(db, session_id)
+        analysis = self.analyzer.get_result(session.analysis_id, db=db)
         if analysis is None:
             raise ValueError("Analysis not found")
 
         safe_content = CONTROL_CHARS_RE.sub("", content)
-        self.repository.add_message(session_id, ChatRole.USER, safe_content)
+        ChatRepository.add_message(db, session_id, ChatRole.USER, safe_content)
         logger.info("Chat question (%s): %s", session_id, safe_content[:50])
 
-        history = self.repository.get_history(session_id)
+        history = ChatRepository.get_history(db, session_id)
         prompt = self.context_builder.build(analysis, history, safe_content)
         answer = self._call_llm(prompt)
         safe_answer = CONTROL_CHARS_RE.sub("", answer)
-        msg = self.repository.add_message(session_id, ChatRole.ASSISTANT, safe_answer)
+        msg = ChatRepository.add_message(db, session_id, ChatRole.ASSISTANT, safe_answer)
         return msg.to_response()
 
     def _call_llm(self, prompt: str) -> str:

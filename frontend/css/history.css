@@ -1,0 +1,94 @@
+/* Analysis History Styling */
+
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item:hover, .history-item.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.history-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-score {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.score-high { color: var(--high); }
+.score-medium { color: var(--medium); }
+.score-low { color: var(--accent); }
+
+.history-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.btn-load-more {
+  width: 100%;
+  padding: 8px;
+  text-align: center;
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-load-more:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

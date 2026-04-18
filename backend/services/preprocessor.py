@@ -139,27 +139,32 @@ class PreprocessorService:
         return segments
 
     def _segment_by_paragraphs(self, text: str) -> list[str]:
-        """Прежняя логика: разбивка по двойным переносам строк."""
+        """Улучшенная логика: разбивка по абзацам без потери данных."""
         paragraphs = [p.strip() for p in re.split(r"\n\n+", text) if p.strip()]
         segments = []
         buffer = ""
+        
         for para in paragraphs:
-            if len(para) < 60 and not para.endswith("."):
-                continue
+            # Длинный параграф: дробим по предложениям
             if len(para) > self.MAX_SEGMENT_LENGTH:
-                if buffer and len(buffer) >= self.MIN_SEGMENT_LENGTH:
+                if buffer:
                     segments.append(buffer)
                     buffer = ""
                 segments.extend(self._split_by_sentences(para))
                 continue
+            
+            # Аккумулируем абзацы до достижения TARGET_SEGMENT_LENGTH
             if len(buffer) + len(para) < self.TARGET_SEGMENT_LENGTH:
                 buffer = (buffer + " " + para).strip() if buffer else para
             else:
-                if len(buffer) >= self.MIN_SEGMENT_LENGTH:
+                if buffer:
                     segments.append(buffer)
                 buffer = para
-        if buffer and len(buffer) >= self.MIN_SEGMENT_LENGTH:
+                
+        # Если что-то осталось в буфере (любой длины!) — сохраняем
+        if buffer:
             segments.append(buffer)
+            
         return segments
 
     def _split_by_sentences(self, text: str) -> list[str]:
@@ -173,9 +178,9 @@ class PreprocessorService:
             if len(buffer) + len(sent) < self.TARGET_SEGMENT_LENGTH:
                 buffer = (buffer + " " + sent).strip() if buffer else sent
             else:
-                if len(buffer) >= self.MIN_SEGMENT_LENGTH:
+                if buffer:
                     segments.append(buffer)
                 buffer = sent
-        if buffer and len(buffer) >= self.MIN_SEGMENT_LENGTH:
+        if buffer:
             segments.append(buffer)
         return segments or [text[:self.MAX_SEGMENT_LENGTH]]

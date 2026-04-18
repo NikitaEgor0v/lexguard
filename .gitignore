@@ -34,7 +34,7 @@ docker-volumes/
 *.gguf
 *.pt
 *.pth
-models/
+# ML model cache directories (not the Python 'models/' package!)
 huggingface_cache/
 .cache/
 
@@ -52,6 +52,9 @@ logs/
 *.log.*
 
 # ── Тестовые файлы которые не нужны в репо ──
+.pytest_cache/
+.coverage
+htmlcov/
 legal-dataset/
 benchmark.py
 results_*.csv

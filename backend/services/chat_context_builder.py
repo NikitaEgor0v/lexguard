@@ -10,17 +10,26 @@ class ChatContextBuilder:
         self.model_config = model_config
 
     def build(self, analysis: AnalysisResponse, history: list[ChatMessage], question: str) -> str:
-        """Build prompt with analysis, history, and user question."""
+        """Build prompt with analysis, history, and user question securely within context bounds."""
+        # 1. Sliding window: keep only the last 6 messages
+        recent_history = history[-6:]
         history_text = "\n".join(
-            f"{msg.role}: {msg.content}" for msg in history
+            f"{msg.role}: {msg.content}" for msg in recent_history
         )
+        # Safely constrain history text to 2000 chars max
+        if len(history_text) > 2000:
+            history_text = "...\n" + history_text[-2000:]
+
         history_tokens = max(1, len(history_text) // 4) if history_text else 0
         available_tokens = max(200, self.model_config.safe_context - history_tokens)
-        max_contract_chars = max(400, available_tokens * 4)
-
+        
+        # 2. Hard caps on generated strings
+        max_contract_chars = min(2000, max(400, available_tokens * 4))
         contract_text = self._build_contract_text(analysis)
         contract_excerpt = contract_text[:max_contract_chars]
-        risks_text = self._build_risks_text(analysis)
+        
+        # Capping risks text to 1500 chars 
+        risks_text = self._build_risks_text(analysis)[:1500]
 
         return (
             "Ты юридический ассистент системы LexGuard.\n"
@@ -32,8 +41,8 @@ class ChatContextBuilder:
             f"ID анализа: {analysis.analysis_id}\n"
             f"Файл: {analysis.filename}\n\n"
             f"Фрагменты договора:\n{contract_excerpt}\n\n"
-            f"Выявленные риски:\n{risks_text}\n\n"
-            f"История диалога:\n{history_text or '(пусто)'}\n\n"
+            f"Выявленные риски (сокращенно):\n{risks_text}\n\n"
+            f"История диалога (последние сообщения):\n{history_text or '(пусто)'}\n\n"
             f"Вопрос пользователя:\n{question}\n"
         )
 

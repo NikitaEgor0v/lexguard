@@ -3,10 +3,16 @@ import requests
 import logging
 import time
 import os
+from typing import Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
 from config.model_registry import get_model_config
 from models.schemas import (
     AnalysisResponse, AnalysisSummary, RiskItem, RiskLevel, RiskCategory
 )
+from repositories.analysis_repository import AnalysisRepository
 from services.rag import RAGService
 
 logger = logging.getLogger(__name__)
@@ -16,8 +22,8 @@ MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
 MODEL_CONFIG = get_model_config(MODEL_NAME)
 REQUEST_TIMEOUT_SEC = 180
 MAX_LLM_RETRIES = 2
-MAX_SEGMENT_CHARS = 1200
-MAX_RAG_CONTEXT_CHARS = 1200
+MAX_SEGMENT_CHARS = 800
+MAX_RAG_CONTEXT_CHARS = 800
 MAX_CLASSIFY_PREVIEW_CHARS = 800
 CONTRACT_TYPE_LABELS = frozenset({
     "услуги", "подряд", "поставка", "аренда", "трудовой",
@@ -56,23 +62,58 @@ SYSTEM_PROMPT = """Ты — система анализа юридических
 class AnalyzerService:
     def __init__(self):
         self.rag = RAGService()
-        self._results: dict[str, AnalysisResponse] = {}
 
-    def analyze(self, segments: list[str], analysis_id: str, filename: str = "document") -> AnalysisResponse:
+    def analyze(
+        self,
+        segments: list[str],
+        analysis_id: str,
+        filename: str = "document",
+        db: Session | None = None,
+        user_id: UUID | None = None,
+    ) -> AnalysisResponse:
+        import redis
+        import os
+        redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
+        try:
+            r = redis.from_url(redis_url)
+        except Exception as e:
+            logger.warning(f"No redis connection for progress: {e}")
+            r = None
+
         contract_type = self._classify_contract_type(segments)
         risks = []
+        total = len(segments)
         for i, segment in enumerate(segments):
-            logger.info(f"Анализ {i+1}/{len(segments)}")
-            rag_context = self.rag.search(segment, contract_type=contract_type)
+            logger.info(f"Анализ {i+1}/{total}")
+            if r is not None:
+                try:
+                    r.setex(f"progress:{analysis_id}", 3600, f"{i}/{total}")
+                except Exception:
+                    pass
+            # Search both system norms and user's custom documents
+            rag_context = self.rag.search(segment, contract_type=contract_type, user_id=user_id)
             raw = self._call_llm(segment, rag_context)
             risks.append(self._parse(raw, segment, i + 1, rag_context))
+
+        if r is not None:
+            try:
+                r.setex(f"progress:{analysis_id}", 3600, f"{total}/{total}")
+            except Exception:
+                pass
 
         summary = self._summary(risks)
         response = AnalysisResponse(
             analysis_id=analysis_id, filename=filename,
             status="completed", summary=summary, risks=risks,
         )
-        self._results[analysis_id] = response
+
+        # Persist to PostgreSQL
+        if db is not None:
+            try:
+                AnalysisRepository.save_result(db, analysis_id, filename, summary, risks, user_id=user_id)
+            except Exception as e:
+                logger.error("Failed to save analysis to DB: %s", e)
+
         return response
 
     def _call_llm(self, segment: str, rag_context: str | None) -> str:
@@ -194,12 +235,18 @@ class AnalyzerService:
             low_risk_count=low, risk_score=score,
         )
 
-    def get_result(self, analysis_id: str) -> AnalysisResponse | None:
-        return self._results.get(analysis_id)
+    def get_result(self, analysis_id: str, db: Session | None = None) -> AnalysisResponse | None:
+        """Load analysis from PostgreSQL."""
+        if db is not None:
+            return AnalysisRepository.get_result(db, analysis_id)
+        return None
 
     def check_model_status(self) -> dict:
         try:
-            resp = requests.get("http://ollama:11434/api/tags", timeout=5)
+            import os
+            import requests
+            base_url = os.getenv("OLLAMA_HOST", "http://lexguard-ollama:11434")
+            resp = requests.get(f"{base_url}/api/tags", timeout=5)
             models = [m["name"] for m in resp.json().get("models", [])]
             model_base = MODEL_NAME.split(":")[0]
             return {
