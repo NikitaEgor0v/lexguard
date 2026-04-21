@@ -20,6 +20,7 @@ from models.schemas import (
     RiskLevel,
     RiskCategory,
 )
+from services.executive_summary import build_executive_summary
 
 logger = logging.getLogger(__name__)
 
@@ -141,5 +142,6 @@ class AnalysisRepository:
             filename=row.filename,
             status=row.status,
             summary=summary,
+            executive_summary=build_executive_summary(summary, risks),
             risks=risks,
         )

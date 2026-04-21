@@ -84,6 +84,7 @@ class ChatService:
             "options": {
                 "temperature": self.model_config.temperature,
                 "num_predict": self.model_config.max_output,
+                "num_ctx": self.model_config.context_window,
             },
         }
         started = time.monotonic()

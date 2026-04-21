@@ -28,7 +28,7 @@ window.app = {
       const txt = document.getElementById('statusText');
       if (d.ollama === 'running' && d.model_available) {
         dot.className = 'status-dot online';
-        txt.textContent = `gemma3 · ${d.rag?.norms_count || 0} норм в RAG`;
+        txt.textContent = `${d.model || 'модель'} · ${d.rag?.norms_count || 0} норм в RAG`;
       } else if (d.ollama === 'running') {
         dot.className = 'status-dot';
         txt.textContent = 'ollama запущен, модель не найдена';

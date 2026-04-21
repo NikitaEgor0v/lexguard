@@ -8,7 +8,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap"
     rel="stylesheet">
-  
+
   <link rel="stylesheet" href="/css/variables.css">
   <link rel="stylesheet" href="/css/layout.css">
   <link rel="stylesheet" href="/css/components.css">
@@ -28,7 +28,7 @@
       <div class="logo-icon">⚖</div>
       LexGuard
     </a>
-    
+
     <div class="topbar-right">
       <div class="status-badge">
         <div class="status-dot" id="statusDot"></div>
@@ -36,7 +36,7 @@
       </div>
 
       <button class="theme-toggle" id="themeIcon" onclick="toggleTheme()" title="Сменить тему">☀️</button>
-      
+
       <div class="auth-nav">
         <div id="userInfo" style="display:none;" class="user-badge">
           <span id="userName">User</span>
@@ -103,7 +103,7 @@
         </div>
         <div class="loading-step" id="step4">
           <div class="step-indicator">4</div>
-          <span>Анализ через Gemma3</span>
+          <span>Анализ</span>
         </div>
         <div class="loading-step" id="step5">
           <div class="step-indicator">5</div>
@@ -147,10 +147,11 @@
         <div class="docs-header">
           <div class="docs-title">Эталоны (RAG)</div>
         </div>
-        
+
         <div class="doc-upload-form">
           <div class="doc-file-zone" onclick="document.getElementById('docFileInput').click()">
-            <input type="file" id="docFileInput" accept=".pdf,.docx" style="display:none" onchange="window.documentsAPI.handleFileSelect()">
+            <input type="file" id="docFileInput" accept=".pdf,.docx" style="display:none"
+              onchange="window.documentsAPI.handleFileSelect()">
             <span id="docFileSelected">Выберите файл эталона</span>
           </div>
           <div class="doc-input-group">
@@ -168,7 +169,8 @@
           <div class="doc-input-group">
             <input type="text" class="doc-input" id="docDescInput" placeholder="Описание (опционально)">
           </div>
-          <button class="btn-primary" id="docSubmitBtn" style="padding:8px" disabled onclick="window.documentsAPI.submitUpload(this)">Загрузить</button>
+          <button class="btn-primary" id="docSubmitBtn" style="padding:8px" disabled
+            onclick="window.documentsAPI.submitUpload(this)">Загрузить</button>
         </div>
 
         <div class="doc-list" id="docList"></div>
@@ -180,9 +182,10 @@
           <div class="history-title">История анализов</div>
         </div>
         <div class="history-list" id="historyList"></div>
-        <button class="btn-load-more" id="historyLoadMore" style="display:none" onclick="window.historyAPI.loadList(false)">Показать ещё</button>
+        <button class="btn-load-more" id="historyLoadMore" style="display:none"
+          onclick="window.historyAPI.loadList(false)">Показать ещё</button>
       </div>
-      
+
     </aside>
 
     <!-- Right panel (Results & Chat) -->
@@ -201,15 +204,43 @@
             <div class="results-title">Результаты анализа</div>
             <div class="results-filename" id="resultsFilename"></div>
           </div>
-          <button class="btn-outline" onclick="window.analysis.exportJSON()">Экспорт JSON</button>
+          <div class="results-actions">
+            <button class="btn-outline" id="highlightModeBtn" onclick="window.analysis.toggleHighlightMode()">Режим
+              разметки</button>
+            <button class="btn-outline" onclick="window.analysis.exportJSON()">Экспорт JSON</button>
+          </div>
         </div>
 
+        <div class="executive-summary" id="executiveSummary" style="display:none;">
+          <div class="executive-summary-title">Executive Summary</div>
+          <div class="executive-summary-text" id="executiveSummaryText"></div>
+        </div>
+
+        <div class="category-filters" id="categoryFilters"></div>
+
         <div class="filters">
-          <button class="filter-btn active" data-filter="all" onclick="window.analysis.setFilter('all', this)">Все</button>
-          <button class="filter-btn f-high" data-filter="high" onclick="window.analysis.setFilter('high', this)">Высокий</button>
-          <button class="filter-btn f-medium" data-filter="medium" onclick="window.analysis.setFilter('medium', this)">Средний</button>
-          <button class="filter-btn f-low" data-filter="low" onclick="window.analysis.setFilter('low', this)">Низкий</button>
-          <button class="filter-btn" data-filter="none" onclick="window.analysis.setFilter('none', this)">Без риска</button>
+          <button class="filter-btn active" data-filter="all"
+            onclick="window.analysis.setFilter('all', this)">Все</button>
+          <button class="filter-btn f-high" data-filter="high"
+            onclick="window.analysis.setFilter('high', this)">Высокий</button>
+          <button class="filter-btn f-medium" data-filter="medium"
+            onclick="window.analysis.setFilter('medium', this)">Средний</button>
+          <button class="filter-btn f-low" data-filter="low"
+            onclick="window.analysis.setFilter('low', this)">Низкий</button>
+          <button class="filter-btn" data-filter="none" onclick="window.analysis.setFilter('none', this)">Без
+            риска</button>
+        </div>
+
+        <div class="highlight-wrap" id="highlightWrap" style="display:none;">
+          <div class="highlight-pane">
+            <div class="highlight-title">Текст договора (сегменты)</div>
+            <div class="highlight-source-list" id="highlightSourceList"></div>
+          </div>
+          <div class="highlight-pane">
+            <div class="highlight-title">Пояснение по сегменту</div>
+            <div class="highlight-detail" id="highlightDetail">Выберите сегмент слева, чтобы открыть объяснение риска и
+              перейти к карточке.</div>
+          </div>
         </div>
 
         <div class="risk-list" id="riskList"></div>
@@ -228,7 +259,8 @@
         </div>
 
         <div class="chat-input-wrap">
-          <textarea id="chatInput" class="chat-input" placeholder="Задайте вопрос по договору..." rows="1" maxlength="2000"></textarea>
+          <textarea id="chatInput" class="chat-input" placeholder="Задайте вопрос по договору..." rows="1"
+            maxlength="2000"></textarea>
           <button class="chat-send-btn" id="chatSendBtn" onclick="window.chat.sendMessage()">→</button>
         </div>
       </div>
@@ -242,30 +274,30 @@
         <div class="auth-title">Вход в LexGuard</div>
         <div class="auth-subtitle">Для работы системы требуется авторизация</div>
       </div>
-      
+
       <div class="auth-tabs">
         <div class="auth-tab active" id="authLoginTab" onclick="window.auth.switchTab('login')">Вход</div>
         <div class="auth-tab" id="authRegisterTab" onclick="window.auth.switchTab('register')">Регистрация</div>
       </div>
-      
+
       <form onsubmit="window.auth.handleFormSubmit(event)">
         <div class="auth-form-group" id="authUsernameGroup" style="display:none">
           <label class="auth-label">Имя пользователя</label>
           <input type="text" id="authUsername" class="auth-input" placeholder="Ivan">
         </div>
-        
+
         <div class="auth-form-group">
           <label class="auth-label">Email</label>
           <input type="email" id="authEmail" class="auth-input" placeholder="example@mail.com" required>
         </div>
-        
+
         <div class="auth-form-group">
           <label class="auth-label">Пароль</label>
           <input type="password" id="authPassword" class="auth-input" placeholder="••••••••" required minlength="6">
         </div>
-        
+
         <div class="auth-error" id="authError"></div>
-        
+
         <button type="submit" class="btn-primary" id="authSubmitBtn">Войти</button>
       </form>
     </div>
@@ -282,4 +314,5 @@
   <script src="/js/app.js?v=4"></script>
 
 </body>
+
 </html>

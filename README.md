@@ -61,7 +61,7 @@ lexguard/
 │   ├── main.py              # FastAPI приложение
 │   ├── requirements.txt
 │   ├── data/
-│   │   └── legal_norms.json # База нормативных шаблонов (48 норм)
+│   │   └── legal_norms.json # Расширенная база нормативных шаблонов (~294 норм)
 │   ├── api/
 │   │   └── routes.py        # REST API эндпоинты
 │   ├── models/
@@ -83,6 +83,7 @@ lexguard/
 |---|---|---|
 | POST | `/api/v1/analyze` | Загрузить и проанализировать договор |
 | GET | `/api/v1/analyze/{id}` | Получить результат по ID |
+| GET | `/api/v1/analyze/{id}/grouped` | Получить риски, сгруппированные по категориям |
 | GET | `/api/v1/status` | Статус системы (Ollama, RAG) |
 | GET | `/health` | Healthcheck |
 
@@ -100,6 +101,7 @@ curl -X POST http://localhost:3000/api/v1/analyze \
   "analysis_id": "uuid",
   "filename": "contract.pdf",
   "status": "completed",
+  "executive_summary": "Договор классифицирован как высокорисковый...",
   "summary": {
     "total_segments": 14,
     "risky_segments": 6,
@@ -120,6 +122,16 @@ curl -X POST http://localhost:3000/api/v1/analyze \
     }
   ]
 }
+```
+
+## База норм и контроль качества
+
+```bash
+# Сгенерировать расширенную базу legal_norms.json
+python backend/scripts/generate_extended_legal_norms.py
+
+# Провалидировать схему и качество норм
+python backend/scripts/validate_legal_norms.py
 ```
 
 ## Остановка

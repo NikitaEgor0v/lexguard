@@ -7,6 +7,7 @@ from config.security import get_current_user
 from models.db_models import UserDB
 from services.analyzer import AnalyzerService
 from services.preprocessor import PreprocessorService
+from services.risk_grouping import group_analysis_risks
 from models.schemas import AnalysisResponse, AnalysisStatus
 import uuid
 import logging
@@ -103,6 +104,18 @@ def get_analysis(
             "progress_label": label
         })
     return result
+
+
+@router.get("/analyze/{analysis_id}/grouped")
+def get_analysis_grouped(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
+):
+    result = analyzer.get_result(analysis_id, db=db)
+    if not result:
+        raise HTTPException(status_code=404, detail="Результат анализа не найден")
+    return group_analysis_risks(result)
 
 
 @router.get("/analyses")

@@ -43,6 +43,7 @@ class AnalysisResponse(BaseModel):
     filename: str
     status: str = "completed"
     summary: AnalysisSummary
+    executive_summary: Optional[str] = None
     risks: list[RiskItem]
 
 

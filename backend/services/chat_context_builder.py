@@ -16,20 +16,20 @@ class ChatContextBuilder:
         history_text = "\n".join(
             f"{msg.role}: {msg.content}" for msg in recent_history
         )
-        # Safely constrain history text to 2000 chars max
-        if len(history_text) > 2000:
-            history_text = "...\n" + history_text[-2000:]
+        # Safely constrain history text to 1000 chars max
+        if len(history_text) > 1000:
+            history_text = "...\n" + history_text[-1000:]
 
         history_tokens = max(1, len(history_text) // 4) if history_text else 0
         available_tokens = max(200, self.model_config.safe_context - history_tokens)
         
-        # 2. Hard caps on generated strings
-        max_contract_chars = min(2000, max(400, available_tokens * 4))
+        # 2. Hard caps on generated strings (Tighter for heavy cyrillic load)
+        max_contract_chars = min(1200, max(400, available_tokens * 3))
         contract_text = self._build_contract_text(analysis)
         contract_excerpt = contract_text[:max_contract_chars]
         
-        # Capping risks text to 1500 chars 
-        risks_text = self._build_risks_text(analysis)[:1500]
+        # Capping risks text to 1000 chars 
+        risks_text = self._build_risks_text(analysis)[:1000]
 
         return (
             "Ты юридический ассистент системы LexGuard.\n"

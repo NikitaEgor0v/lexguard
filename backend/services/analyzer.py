@@ -13,6 +13,7 @@ from models.schemas import (
     AnalysisResponse, AnalysisSummary, RiskItem, RiskLevel, RiskCategory
 )
 from repositories.analysis_repository import AnalysisRepository
+from services.executive_summary import build_executive_summary
 from services.rag import RAGService
 
 logger = logging.getLogger(__name__)
@@ -102,9 +103,13 @@ class AnalyzerService:
                 pass
 
         summary = self._summary(risks)
+        executive_summary = build_executive_summary(summary, risks)
         response = AnalysisResponse(
             analysis_id=analysis_id, filename=filename,
-            status="completed", summary=summary, risks=risks,
+            status="completed",
+            summary=summary,
+            executive_summary=executive_summary,
+            risks=risks,
         )
 
         # Persist to PostgreSQL
