@@ -32,21 +32,26 @@ from models.chat_schemas import ChatMessage, ChatRole
 @pytest.fixture
 def sample_analysis_response():
     """Минимальный AnalysisResponse для тестов."""
-    def _factory(num_risks=3, analysis_id=None):
+    def _factory(num_risks=10, analysis_id=None):
         aid = analysis_id or str(uuid.uuid4())
         risks = []
-        levels = [RiskLevel.HIGH, RiskLevel.MEDIUM, RiskLevel.LOW]
-        cats = [RiskCategory.FINANCIAL, RiskCategory.LEGAL, RiskCategory.OPERATIONAL]
+        levels = [RiskLevel.HIGH, RiskLevel.MEDIUM, RiskLevel.LOW, RiskLevel.NONE]
+        cats = [
+            RiskCategory.FINANCIAL, RiskCategory.LEGAL, RiskCategory.OPERATIONAL, 
+            RiskCategory.INTELLECTUAL, RiskCategory.REPUTATIONAL
+        ]
         for i in range(num_risks):
+            level = levels[i % 4]
+            is_risky = level != RiskLevel.NONE
             risks.append(RiskItem(
                 segment_id=i + 1,
-                text=f"Тестовый фрагмент договора #{i+1}. " * 10,
-                is_risky=levels[i % 3] != RiskLevel.NONE,
-                risk_level=levels[i % 3],
-                risk_category=cats[i % 3],
-                risk_description=f"Описание риска #{i+1}",
-                recommendation=f"Рекомендация #{i+1}",
-                rag_context=f"Контекст RAG #{i+1}" if i < 2 else None,
+                text=f"Тестовый фрагмент договора #{i+1}. " * 5,
+                is_risky=is_risky,
+                risk_level=level,
+                risk_category=cats[i % 5] if is_risky else None,
+                risk_description=f"Описание риска #{i+1}" if is_risky else None,
+                recommendation=f"Рекомендация #{i+1}" if is_risky else None,
+                rag_context=f"Контекст RAG #{i+1}" if i < 5 else None,
             ))
         summary = AnalysisSummary(
             total_segments=num_risks,
@@ -54,11 +59,12 @@ def sample_analysis_response():
             high_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.HIGH),
             medium_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.MEDIUM),
             low_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.LOW),
-            risk_score=0.65,
+            risk_score=0.45,
         )
         return AnalysisResponse(
             analysis_id=aid, filename="test_contract.pdf",
             status="completed", summary=summary, risks=risks,
+            executive_summary="Автоматическая сводка по рискам для теста."
         )
     return _factory
 

@@ -182,6 +182,38 @@ class TestEmptyContextFallback:
         result = rag.search("Права на программное обеспечение")
         assert result is not None  # fallback сработал
 
+    def test_search_output_contains_new_fields(self):
+        """
+        ПРОВЕРКА НОВОЙ ЮР-БАЗЫ: вывод RAG должен содержать 
+        Критичность, Уловки и Правовое основание.
+        """
+        rag = RAGService.__new__(RAGService)
+        rag._ready = True
+        rag._encoder = MagicMock()
+        rag._encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 768)
+
+        mock_hit = MagicMock()
+        mock_hit.payload = {
+            "risk_category": "финансовый",
+            "topic": "неустойка",
+            "criticality": "high",
+            "deception_patterns": ["скрытая пеня"],
+            "legal_basis": ["ст. 330 ГК РФ"],
+            "safe_norm": "Норма про неустойку",
+            "risky_pattern": "Признак риска",
+        }
+        
+        mock_client = MagicMock()
+        mock_client.search.return_value = [mock_hit]
+        rag._client = mock_client
+
+        result = rag.search("запрос")
+        
+        assert "Критичность: HIGH" in result
+        assert "Уловки/паттерны: скрытая пеня" in result
+        assert "Правовое основание: ст. 330 ГК РФ" in result
+        assert "Норма про неустойку" in result
+
 
 # ═══════════════════════════════════════════════════════════════
 # СЦЕНАРИЙ 1.3: Разрыв контекста на границе чанков

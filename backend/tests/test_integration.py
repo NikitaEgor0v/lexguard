@@ -125,6 +125,25 @@ class TestFullAnalysisPipeline:
         assert result.risks[1].is_risky is True
         assert result.risks[1].risk_level == RiskLevel.LOW
 
+    def test_grouped_endpoint(self, sample_analysis_response):
+        """Интеграционный тест для эндпоинта /grouped."""
+        result = sample_analysis_response(num_risks=5)
+        
+        with patch("services.analyzer.AnalyzerService.get_result", return_value=result):
+            from api.routes import get_analysis_grouped
+            
+            # Имитируем вызов эндпоинта
+            grouped = get_analysis_grouped(
+                analysis_id=result.analysis_id,
+                db=MagicMock(),
+                current_user=MagicMock()
+            )
+            
+            assert grouped["analysis_id"] == result.analysis_id
+            assert "groups" in grouped
+            # В sample_analysis_response(5) риски распределены по категориям
+            assert len(grouped["groups"]) > 0
+
 
 # ═══════════════════════════════════════════════════════════════
 # СЦЕНАРИЙ 3.2: Chat Service — контекстное окно при длинной истории

@@ -10,4 +10,4 @@ def test_group_analysis_risks_groups_by_category(sample_analysis_response):
     assert len(grouped["groups"]) > 0
 
     totals = sum(group["total"] for group in grouped["groups"])
-    assert totals == len(analysis.risks)
+    assert totals == analysis.summary.risky_segments
