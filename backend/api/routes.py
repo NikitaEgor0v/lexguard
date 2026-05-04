@@ -53,6 +53,17 @@ async def analyze_document(
         from services.tasks import analyze_document_task
         uid_str = str(current_user.id) if current_user else None
         
+        from models.db_models import AnalysisResultDB
+        new_analysis = AnalysisResultDB(
+            id=uuid.UUID(analysis_id),
+            user_id=current_user.id if current_user else None,
+            filename=filename,
+            status="processing",
+            total_segments=len(segments),
+        )
+        db.add(new_analysis)
+        db.commit()
+        
         # Submit to Celery
         task = analyze_document_task.delay(segments, analysis_id, filename, uid_str)
         logger.info("Sent analysis %s to Celery (Task ID: %s)", analysis_id, task.id)
@@ -78,7 +89,7 @@ def get_analysis(
     current_user: UserDB = Depends(get_current_user),
 ):
     result = analyzer.get_result(analysis_id, db=db)
-    if not result:
+    if not result or result.status == "processing":
         import redis
         import os
         from fastapi.responses import JSONResponse
@@ -100,6 +111,7 @@ def get_analysis(
         return JSONResponse(status_code=200, content={
             "status": "processing", 
             "analysis_id": analysis_id,
+            "filename": result.filename if result else None,
             "progress_percent": pct,
             "progress_label": label
         })

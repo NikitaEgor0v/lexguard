@@ -43,8 +43,18 @@ window.historyAPI = {
         
         // Calculate score color class
         let scoreClass = 'score-low';
-        if (item.risk_score > 0.6) scoreClass = 'score-high';
-        else if (item.risk_score > 0.3) scoreClass = 'score-medium';
+        let scoreText = `Idx: ${item.risk_score.toFixed(2)}`;
+        
+        if (item.status === 'processing') {
+            scoreClass = 'score-medium';
+            scoreText = 'В процессе';
+        } else if (item.status === 'failed') {
+            scoreClass = 'score-high';
+            scoreText = 'Ошибка';
+        } else {
+            if (item.risk_score > 0.6) scoreClass = 'score-high';
+            else if (item.risk_score > 0.3) scoreClass = 'score-medium';
+        }
         
         const div = document.createElement('div');
         div.className = 'history-item';
@@ -54,7 +64,7 @@ window.historyAPI = {
         div.innerHTML = `
           <div class="history-name" title="${item.filename}">${item.filename}</div>
           <div class="history-metrics">
-            <span class="history-score ${scoreClass}">Idx: ${item.risk_score.toFixed(2)}</span>
+            <span class="history-score ${scoreClass}">${scoreText}</span>
             <span class="history-date">${ts}</span>
           </div>
         `;
