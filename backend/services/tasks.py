@@ -33,8 +33,36 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
         return {"status": "completed", "analysis_id": analysis_id}
     except Exception as e:
         logger.exception("Analysis task %s failed", analysis_id)
-        # We could also track failures in the DB if we added a status field to AnalysisResultDB
-        # Right now we rely on the client noticing a timeout or checking Celery results
+        try:
+            from models.db_models import AnalysisResultDB
+            import uuid
+            uid = uuid.UUID(user_id_str) if user_id_str else None
+            failed_analysis = AnalysisResultDB(
+                id=uuid.UUID(analysis_id),
+                user_id=uid,
+                filename=filename,
+                status="failed",
+                total_segments=len(segments),
+                risky_segments=0,
+                high_risk_count=0,
+                medium_risk_count=0,
+                low_risk_count=0,
+                risk_score=0.0
+            )
+            db.add(failed_analysis)
+            db.commit()
+        except Exception as db_err:
+            logger.error("Failed to save error state to DB: %s", db_err)
+            
+        try:
+            import redis
+            import os
+            redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
+            r = redis.from_url(redis_url)
+            r.setex(f"progress:{analysis_id}", 3600, "error")
+        except Exception as redis_err:
+            logger.error("Failed to update redis: %s", redis_err)
+
         raise e
     finally:
         db.close()

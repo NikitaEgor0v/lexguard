@@ -15,6 +15,8 @@ window.analysis = {
     uncategorized: 'Без категории',
   },
   
+  currentPollingId: null,
+
   async start() {
     if (!window.upload.currentFile) return;
     
@@ -48,7 +50,15 @@ window.analysis = {
       
       if (respRaw.status === 202) {
         const initData = await respRaw.json();
+        
+        // Extraction and segmentation are done synchronously.
+        document.getElementById('step1').className = 'loading-step done';
+        document.getElementById('step2').className = 'loading-step done';
+        document.getElementById('step3').className = 'loading-step active';
+        this.setProgress(10, 'Инициализация LLM...');
+        
         result = await this.pollResult(initData.analysis_id);
+        if (!result) return; // Polling was cancelled by another action
       } else {
         result = await respRaw.json();
       }
@@ -68,9 +78,15 @@ window.analysis = {
   },
   
   async pollResult(analysis_id) {
+    this.currentPollingId = analysis_id;
     const maxAttempts = 1200; // 1200 * 3s = 60 minutes
     for (let i = 0; i < maxAttempts; i++) {
+        if (this.currentPollingId !== analysis_id) return null;
+        
         await new Promise(r => setTimeout(r, 3000));
+        
+        if (this.currentPollingId !== analysis_id) return null;
+        
         const res = await window.api.fetch(`/analyze/${analysis_id}`);
         
         if (res.status === 'completed' || res.analysis_id && !res.status) {
@@ -81,16 +97,25 @@ window.analysis = {
         
         if (res.status === 'processing') {
              // Real progress updating from server
-             let pct = res.progress_percent || 0;
+             let rawPct = res.progress_percent || 0;
+             // Scale from 10% to 100% since we already advanced past step 1 & 2
+             let pct = 10 + Math.floor(rawPct * 0.9);
              let label = res.progress_label || 'Обработка в фоне...';
              this.setProgress(pct, label);
              
              // Update step visuals dynamically
-             if (pct > 0) {
-                 document.getElementById('step1').className = 'loading-step done';
-                 document.getElementById('step2').className = 'loading-step done';
+             document.getElementById('step1').className = 'loading-step done';
+             document.getElementById('step2').className = 'loading-step done';
+             
+             if (rawPct > 0) {
+                 document.getElementById('step3').className = 'loading-step done';
+                 document.getElementById('step4').className = 'loading-step active';
+                 if (rawPct >= 95) {
+                     document.getElementById('step4').className = 'loading-step done';
+                     document.getElementById('step5').className = 'loading-step active';
+                 }
+             } else {
                  document.getElementById('step3').className = 'loading-step active';
-                 if (pct > 95) document.getElementById('step4').className = 'loading-step active';
              }
         }
     }

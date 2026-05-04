@@ -60,7 +60,45 @@ window.app = {
   async loadExistingAnalysis(analysis_id) {
     try {
       const data = await window.api.fetch(`/analyze/${analysis_id}`);
+      
+      if (data.status === 'processing') {
+        window.upload.clearSelection();
+        document.getElementById('uploadZone').style.display = 'none';
+        const sel = document.getElementById('fileSelected');
+        sel.classList.add('visible');
+        document.getElementById('fileExt').textContent = '...';
+        document.getElementById('fileName').textContent = data.filename || 'Идет анализ...';
+        
+        // Hide result sections
+        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('summarySection').style.display = 'none';
+        document.getElementById('chatSection').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'flex';
+        
+        window.analysis.setLoading(true);
+        
+        try {
+          const result = await window.analysis.pollResult(analysis_id);
+          if (!result) return; // Polling cancelled
+          window.analysis.renderResults(result);
+          if (window.historyAPI) window.historyAPI.loadList();
+          document.getElementById('analyzeBtn').style.display = 'none';
+          document.getElementById('progressWrap').classList.remove('visible');
+          document.getElementById('loadingSteps').classList.remove('visible');
+        } catch (e) {
+          this.showError('Ошибка ожидания: ' + e.message);
+          window.analysis.setLoading(false);
+        }
+        return;
+      }
+      
       window.upload.clearSelection();
+      
+      // Hide loading sections
+      document.getElementById('analyzeBtn').style.display = 'none';
+      document.getElementById('progressWrap').classList.remove('visible');
+      document.getElementById('loadingSteps').classList.remove('visible');
+      
       window.analysis.renderResults(data);
       
       // Attempt to load associated chat session (assume 1 session per analysis for simplicity)

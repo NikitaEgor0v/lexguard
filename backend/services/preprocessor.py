@@ -22,7 +22,13 @@ class PreprocessorService:
         try:
             import pdfplumber
             with pdfplumber.open(io.BytesIO(content)) as pdf:
-                return "\n".join(p.extract_text() or "" for p in pdf.pages)
+                # x_tolerance=1 заставляет библиотеку быть более чувствительной к малым расстояниям
+                # и принудительно вставлять пробел, если расстояние между символами чуть больше обычного.
+                # keep_blank_chars=True помогает сохранить «невидимые» пробелы из PDF.
+                return "\n".join(
+                    p.extract_text(x_tolerance=1, keep_blank_chars=True) or "" 
+                    for p in pdf.pages
+                )
         except ImportError:
             raise RuntimeError("pdfplumber не установлен")
 
@@ -35,28 +41,24 @@ class PreprocessorService:
             raise RuntimeError("python-docx не установлен")
 
     def _clean_text(self, text: str) -> str:
+        text = text.replace("\xa0", " ")
+        text = text.replace("\u200b", "")
         text = re.sub(r"[ \t]+", " ", text)
         text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"-\n(\w)", r"\1", text)
         return text.strip()
 
-    # Распознаёт начало пункта в позиции начала строки (с возможным ведущим пробелом)
-    # либо после переноса строки \n или просто пробела.
-    # Это решает проблему потери переносов строк при парсинге PDF/DOCX.
-    # Поддерживает форматы:
-    #   1.  2.  10.          — одноуровневый номер с точкой
-    #   1.1.  5.3.  10.2.1.  — многоуровневый номер с точкой
-    #   1)  5)  10)          — номер со скобкой
-    #   а)  б)  в)  ...      — кириллическая буква со скобкой (подпункты)
+    # Распознаёт начало пункта в начале строки (с возможными пробелами).
+    # Используется \s+ вместо [ \t]+ для поддержки переносов и неразрывных пробелов из PDF.
     CLAUSE_PATTERN = re.compile(
-        r"(?:^|\s)"                          # начало текста или любой пробельный символ (вкл. \n)
+        r"(?:^|\n)\s*"                       # начало строки + возможные пробелы/отступы
         r"(?:"
-        r"\d+(?:\.\d+)*\.[ \t]+"             # 5.  или 5.1.  или 5.1.1. + пробел
+        r"\d+(?:\.\d+)*\.\s*"                # 5.  или 5.1.  или 5.1.1. + возможный пробел/перенос
         r"|"
-        r"\d+\)[ \t]+"                        # 5) + пробел
+        r"\d+\)\s*"                          # 5) + возможный пробел/перенос
         r"|"
-        r"[а-яёa-z]\)[ \t]+"                 # а) б) в) + пробел
+        r"[а-яёA-Za-z]\)\s*"                 # а) б) в) A) B) + возможный пробел/перенос
         r")"
     )
 
@@ -183,4 +185,14 @@ class PreprocessorService:
                 buffer = sent
         if buffer:
             segments.append(buffer)
-        return segments or [text[:self.MAX_SEGMENT_LENGTH]]
+            
+        final_segments = []
+        for seg in segments:
+            if len(seg) > self.MAX_SEGMENT_LENGTH:
+                # Если предложение слишком длинное (нет знаков препинания), дробим его жестко
+                for i in range(0, len(seg), self.TARGET_SEGMENT_LENGTH):
+                    final_segments.append(seg[i:i+self.TARGET_SEGMENT_LENGTH])
+            else:
+                final_segments.append(seg)
+                
+        return final_segments or [text[:self.MAX_SEGMENT_LENGTH]]

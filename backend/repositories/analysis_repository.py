@@ -38,18 +38,23 @@ class AnalysisRepository:
         user_id: UUID | None = None,
     ) -> AnalysisResultDB:
         """Save a complete analysis (header + risks) in one transaction."""
-        analysis = AnalysisResultDB(
-            id=uuid.UUID(analysis_id),
-            user_id=user_id,
-            filename=filename,
-            status="completed",
-            total_segments=summary.total_segments,
-            risky_segments=summary.risky_segments,
-            high_risk_count=summary.high_risk_count,
-            medium_risk_count=summary.medium_risk_count,
-            low_risk_count=summary.low_risk_count,
-            risk_score=summary.risk_score,
-        )
+        uid = uuid.UUID(analysis_id)
+        analysis = db.query(AnalysisResultDB).filter_by(id=uid).first()
+        if not analysis:
+            analysis = AnalysisResultDB(id=uid, user_id=user_id)
+            db.add(analysis)
+
+        analysis.filename = filename
+        analysis.status = "completed"
+        analysis.total_segments = summary.total_segments
+        analysis.risky_segments = summary.risky_segments
+        analysis.high_risk_count = summary.high_risk_count
+        analysis.medium_risk_count = summary.medium_risk_count
+        analysis.low_risk_count = summary.low_risk_count
+        analysis.risk_score = summary.risk_score
+        
+        analysis.risks.clear()
+
         for risk in risks:
             analysis.risks.append(
                 RiskItemDB(
@@ -63,7 +68,6 @@ class AnalysisRepository:
                     rag_context=risk.rag_context,
                 )
             )
-        db.add(analysis)
         db.commit()
         db.refresh(analysis)
         logger.info("Analysis %s saved to DB (%d risks)", analysis_id, len(risks))
