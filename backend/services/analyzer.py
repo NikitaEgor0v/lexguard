@@ -25,6 +25,10 @@ REQUEST_TIMEOUT_SEC = 180
 MAX_LLM_RETRIES = 2
 MAX_SEGMENT_CHARS = 800
 MAX_RAG_CONTEXT_CHARS = 800
+# Heartbeat timeout must exceed REQUEST_TIMEOUT_SEC to avoid false "dead" reports
+# when Ollama is processing a complex segment.
+HEARTBEAT_TIMEOUT_SEC = 300
+HEARTBEAT_TTL_SEC = 3600
 MAX_CLASSIFY_PREVIEW_CHARS = 800
 CONTRACT_TYPE_LABELS = frozenset({
     "услуги", "подряд", "поставка", "аренда", "трудовой",
@@ -64,6 +68,16 @@ class AnalyzerService:
     def __init__(self):
         self.rag = RAGService()
 
+    @staticmethod
+    def _update_heartbeat(r, analysis_id: str):
+        """Write current timestamp to heartbeat:{analysis_id} in Redis."""
+        if r is None:
+            return
+        try:
+            r.setex(f"heartbeat:{analysis_id}", HEARTBEAT_TTL_SEC, str(int(time.time())))
+        except Exception:
+            pass
+
     def analyze(
         self,
         segments: list[str],
@@ -81,6 +95,9 @@ class AnalyzerService:
             logger.warning(f"No redis connection for progress: {e}")
             r = None
 
+        # Initial heartbeat — marks the start of analysis
+        self._update_heartbeat(r, analysis_id)
+
         contract_type = self._classify_contract_type(segments)
         risks = []
         total = len(segments)
@@ -91,9 +108,13 @@ class AnalyzerService:
                     r.setex(f"progress:{analysis_id}", 3600, f"{i}/{total}")
                 except Exception:
                     pass
+            # Heartbeat before LLM call (may take up to REQUEST_TIMEOUT_SEC)
+            self._update_heartbeat(r, analysis_id)
             # Search both system norms and user's custom documents
             rag_context = self.rag.search(segment, contract_type=contract_type, user_id=user_id)
             raw = self._call_llm(segment, rag_context)
+            # Heartbeat after LLM call
+            self._update_heartbeat(r, analysis_id)
             risks.append(self._parse(raw, segment, i + 1, rag_context))
 
         if r is not None:

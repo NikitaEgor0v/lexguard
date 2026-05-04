@@ -89,33 +89,101 @@ def get_analysis(
     current_user: UserDB = Depends(get_current_user),
 ):
     result = analyzer.get_result(analysis_id, db=db)
-    if not result or result.status == "processing":
-        import redis
-        import os
+
+    # If analysis is complete, return immediately
+    if result and result.status == "completed":
+        return result
+
+    # If already marked failed in DB, return consistent error response
+    if result and result.status == "failed":
         from fastapi.responses import JSONResponse
-        
-        redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
-        try:
-            r = redis.from_url(redis_url)
-            val = r.get(f"progress:{analysis_id}")
-            progress_str = val.decode() if val else "0/1"
-        except Exception:
-            progress_str = "0/1"
-            
-        parts = progress_str.split("/")
-        current = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 0
-        total = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-        pct = int(current / total * 100) if total > 0 else 0
-        label = f"Анализ {current} из {total}" if current > 0 else "Инициализация LLM..."
-        
         return JSONResponse(status_code=200, content={
-            "status": "processing", 
+            "status": "failed",
+            "analysis_id": analysis_id,
+            "filename": result.filename,
+            "message": "Процесс анализа неожиданно прерван. Попробуйте загрузить документ снова."
+        })
+
+    # Still processing or no DB record yet — check Redis for progress & heartbeat
+    import redis
+    import os
+    import time as _time
+    from fastapi.responses import JSONResponse
+    from services.analyzer import HEARTBEAT_TIMEOUT_SEC
+
+    redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
+    try:
+        r = redis.from_url(redis_url)
+        val = r.get(f"progress:{analysis_id}")
+        progress_str = val.decode() if val else "0/1"
+    except Exception:
+        r = None
+        progress_str = "0/1"
+
+    # ── Heartbeat check: detect dead Celery workers ──
+    heartbeat_stale = False
+    if r is not None:
+        try:
+            hb_raw = r.get(f"heartbeat:{analysis_id}")
+            if hb_raw is not None:
+                last_beat = int(hb_raw.decode())
+                if _time.time() - last_beat > HEARTBEAT_TIMEOUT_SEC:
+                    heartbeat_stale = True
+            else:
+                # No heartbeat key at all — worker may not have started yet.
+                # Only consider dead if enough time passed since DB creation.
+                if result and result.status == "processing":
+                    from models.db_models import AnalysisResultDB
+                    import uuid as _uuid
+                    row = db.query(AnalysisResultDB).filter_by(id=_uuid.UUID(analysis_id)).first()
+                    if row and row.created_at:
+                        from datetime import datetime, timezone
+                        age_sec = (_time.time() - row.created_at.replace(tzinfo=timezone.utc).timestamp())
+                        if age_sec > HEARTBEAT_TIMEOUT_SEC:
+                            heartbeat_stale = True
+        except Exception as hb_err:
+            logger.warning("Heartbeat check failed for %s: %s", analysis_id, hb_err)
+
+    if heartbeat_stale:
+        # Mark as failed in DB so future requests don't re-check
+        try:
+            from models.db_models import AnalysisResultDB
+            import uuid as _uuid
+            row = db.query(AnalysisResultDB).filter_by(id=_uuid.UUID(analysis_id)).first()
+            if row and row.status == "processing":
+                row.status = "failed"
+                db.commit()
+                logger.warning("Analysis %s marked failed: heartbeat stale", analysis_id)
+        except Exception as db_err:
+            logger.error("Failed to mark analysis %s as failed: %s", analysis_id, db_err)
+
+        # Clean up Redis keys
+        try:
+            r.delete(f"progress:{analysis_id}", f"heartbeat:{analysis_id}")
+        except Exception:
+            pass
+
+        return JSONResponse(status_code=200, content={
+            "status": "failed",
             "analysis_id": analysis_id,
             "filename": result.filename if result else None,
-            "progress_percent": pct,
-            "progress_label": label
+            "message": "Процесс анализа неожиданно прерван. Попробуйте загрузить документ снова."
         })
-    return result
+
+    # ── Normal processing response ──
+    parts = progress_str.split("/")
+    current = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 0
+    total = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
+    pct = int(current / total * 100) if total > 0 else 0
+    label = f"Анализ {current} из {total}" if current > 0 else "Инициализация LLM..."
+
+    return JSONResponse(status_code=200, content={
+        "status": "processing",
+        "analysis_id": analysis_id,
+        "filename": result.filename if result else None,
+        "progress_percent": pct,
+        "progress_label": label
+    })
 
 
 @router.get("/analyze/{analysis_id}/grouped")

@@ -93,7 +93,10 @@ window.analysis = {
             // It might return the full AnalysisResponse directly
             return res.analysis_id ? res : res.result; 
         }
-        if (res.status === 'failed') throw new Error('Сбой обработки документа');
+        if (res.status === 'failed') {
+            const msg = res.message || 'Произошёл сбой при анализе. Попробуйте снова.';
+            throw new Error(msg);
+        }
         
         if (res.status === 'processing') {
              // Real progress updating from server

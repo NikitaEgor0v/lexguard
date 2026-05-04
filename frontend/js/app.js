@@ -61,6 +61,14 @@ window.app = {
     try {
       const data = await window.api.fetch(`/analyze/${analysis_id}`);
       
+      if (data.status === 'failed') {
+        // Analysis was marked as failed (e.g. Celery crash detected by heartbeat)
+        const msg = data.message || 'Произошёл сбой при анализе. Попробуйте загрузить документ снова.';
+        this.showError(msg);
+        if (window.historyAPI) window.historyAPI.loadList();
+        return;
+      }
+
       if (data.status === 'processing') {
         window.upload.clearSelection();
         document.getElementById('uploadZone').style.display = 'none';

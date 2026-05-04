@@ -30,6 +30,16 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
         analyzer.analyze(segments, analysis_id, filename, db=db, user_id=uid)
         logger.info("Analysis task %s completed successfully", analysis_id)
         
+        # Clean up heartbeat key on success
+        try:
+            import redis
+            import os
+            redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
+            r = redis.from_url(redis_url)
+            r.delete(f"heartbeat:{analysis_id}")
+        except Exception:
+            pass
+        
         return {"status": "completed", "analysis_id": analysis_id}
     except Exception as e:
         logger.exception("Analysis task %s failed", analysis_id)
@@ -60,6 +70,7 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
             redis_url = os.getenv("REDIS_URL", "redis://lexguard_redis:6379/0")
             r = redis.from_url(redis_url)
             r.setex(f"progress:{analysis_id}", 3600, "error")
+            r.delete(f"heartbeat:{analysis_id}")
         except Exception as redis_err:
             logger.error("Failed to update redis: %s", redis_err)
 
