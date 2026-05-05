@@ -16,7 +16,9 @@
 
 ### Поток данных (Data Flow)
 Краткий жизненный цикл обработки документа:
-`Upload → FastAPI → Preprocessor (разбиение на сегменты) → Celery Queue → Redis (статус) → Qdrant Vector Search (для каждого сегмента) → Ollama RAG Generation → JSON Parse → PostgreSQL Save → Frontend`
+`Upload → FastAPI → Preprocessor (разбиение на сегменты) → Celery Queue → Redis (статус) → ThreadPool (параллельная обработка пачками) → Qdrant Vector Search (для каждого сегмента) → Ollama RAG Generation → JSON Parse → Сборка по segment_id → PostgreSQL Save → Frontend`
+
+> Начиная с версии P1, сегменты анализируются параллельно через `ThreadPoolExecutor` (по умолчанию 3 потока, настраивается через `LLM_MAX_WORKERS`). Прогресс обновляется в Redis атомарно через `INCR`.
 
 Подробнее о потоках данных можно прочитать в [API_AND_DATA_FLOW.md](API_AND_DATA_FLOW.md).
 

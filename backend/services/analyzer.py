@@ -3,6 +3,7 @@ import requests
 import logging
 import time
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from uuid import UUID
 
@@ -30,6 +31,9 @@ MAX_RAG_CONTEXT_CHARS = 800
 HEARTBEAT_TIMEOUT_SEC = 300
 HEARTBEAT_TTL_SEC = 3600
 MAX_CLASSIFY_PREVIEW_CHARS = 800
+# Number of parallel LLM workers. Must match Ollama's OLLAMA_NUM_PARALLEL setting.
+# Too high a value will OOM the GPU/RAM; 3 is a safe default for 8-16 GB VRAM.
+LLM_MAX_WORKERS = int(os.getenv("LLM_MAX_WORKERS", "3"))
 CONTRACT_TYPE_LABELS = frozenset({
     "услуги", "подряд", "поставка", "аренда", "трудовой",
     "лицензионный", "нда", "агентский", "иной",
@@ -99,27 +103,67 @@ class AnalyzerService:
         self._update_heartbeat(r, analysis_id)
 
         contract_type = self._classify_contract_type(segments)
-        risks = []
         total = len(segments)
-        for i, segment in enumerate(segments):
-            logger.info(f"Анализ {i+1}/{total}")
-            if r is not None:
-                try:
-                    r.setex(f"progress:{analysis_id}", 3600, f"{i}/{total}")
-                except Exception:
-                    pass
-            # Heartbeat before LLM call (may take up to REQUEST_TIMEOUT_SEC)
-            self._update_heartbeat(r, analysis_id)
-            # Search both system norms and user's custom documents
-            rag_context = self.rag.search(segment, contract_type=contract_type, user_id=user_id)
-            raw = self._call_llm(segment, rag_context)
-            # Heartbeat after LLM call
-            self._update_heartbeat(r, analysis_id)
-            risks.append(self._parse(raw, segment, i + 1, rag_context))
 
+        # Atomic counter key for thread-safe progress tracking.
+        # Threads call INCR on this key; the readable progress:{analysis_id}
+        # is updated from the counter after each increment.
+        progress_counter_key = f"progress_counter:{analysis_id}"
+        if r is not None:
+            try:
+                r.set(progress_counter_key, 0, ex=3600)
+                r.setex(f"progress:{analysis_id}", 3600, f"0/{total}")
+            except Exception:
+                pass
+
+        # Process segments in parallel using a thread pool.
+        # LLM_MAX_WORKERS must match Ollama's OLLAMA_NUM_PARALLEL to prevent OOM.
+        workers = min(LLM_MAX_WORKERS, total)
+        logger.info(
+            "Параллельный анализ: %d сегментов, %d потоков (LLM_MAX_WORKERS=%d)",
+            total, workers, LLM_MAX_WORKERS,
+        )
+
+        risks: list[RiskItem] = [None] * total  # pre-allocate to maintain order
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(
+                    self._analyze_single_segment,
+                    segment=segment,
+                    segment_index=i,
+                    total=total,
+                    contract_type=contract_type,
+                    user_id=user_id,
+                    redis_conn=r,
+                    analysis_id=analysis_id,
+                    progress_counter_key=progress_counter_key,
+                ): i
+                for i, segment in enumerate(segments)
+            }
+
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    risks[idx] = future.result()
+                except Exception as exc:
+                    # If a single segment fails, log and create a fallback risk
+                    logger.error("Segment %d raised exception: %s", idx + 1, exc)
+                    risks[idx] = RiskItem(
+                        segment_id=idx + 1,
+                        text=segments[idx],
+                        is_risky=True,
+                        risk_level=RiskLevel.LOW,
+                        risk_category=None,
+                        risk_description="Ошибка при параллельной обработке — требует проверки",
+                        recommendation="Проверьте вручную",
+                        rag_context=None,
+                    )
+
+        # Final progress update
         if r is not None:
             try:
                 r.setex(f"progress:{analysis_id}", 3600, f"{total}/{total}")
+                r.delete(progress_counter_key)
             except Exception:
                 pass
 
@@ -141,6 +185,41 @@ class AnalyzerService:
                 logger.error("Failed to save analysis to DB: %s", e)
 
         return response
+
+    def _analyze_single_segment(
+        self,
+        segment: str,
+        segment_index: int,
+        total: int,
+        contract_type: str,
+        user_id: UUID | None,
+        redis_conn,
+        analysis_id: str,
+        progress_counter_key: str,
+    ) -> RiskItem:
+        """Process one segment: RAG search → LLM → parse. Thread-safe."""
+        segment_id = segment_index + 1
+        logger.info("Анализ %d/%d", segment_id, total)
+
+        # Heartbeat before LLM call (may take up to REQUEST_TIMEOUT_SEC)
+        self._update_heartbeat(redis_conn, analysis_id)
+
+        # Search both system norms and user's custom documents
+        rag_context = self.rag.search(segment, contract_type=contract_type, user_id=user_id)
+        raw = self._call_llm(segment, rag_context)
+
+        # Heartbeat after LLM call
+        self._update_heartbeat(redis_conn, analysis_id)
+
+        # Atomic progress update: INCR guarantees no lost writes from concurrent threads
+        if redis_conn is not None:
+            try:
+                done = redis_conn.incr(progress_counter_key)
+                redis_conn.setex(f"progress:{analysis_id}", 3600, f"{done}/{total}")
+            except Exception:
+                pass
+
+        return self._parse(raw, segment, segment_id, rag_context)
 
     def _call_llm(self, segment: str, rag_context: str | None) -> str:
         segment_safe = segment[:MAX_SEGMENT_CHARS]

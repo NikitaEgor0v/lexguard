@@ -6,7 +6,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lexguard"]
+      test: [ "CMD-SHELL", "pg_isready -U lexguard" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,7 +38,7 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,11 +48,14 @@ services:
     container_name: lexguard-ollama
     ports:
       - "11434:11434"
+    environment:
+      # Must match LLM_MAX_WORKERS in celery_worker to avoid Ollama OOM.
+      - OLLAMA_NUM_PARALLEL=${LLM_MAX_WORKERS:-2}
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: [ "CMD", "ollama", "list" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -110,6 +113,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LLM_MODEL=${LLM_MODEL:-gemma2:2b}
+      - LLM_MAX_WORKERS=${LLM_MAX_WORKERS:-3}
       - DATABASE_URL=postgresql://lexguard:${POSTGRES_PASSWORD:-lexguard_dev}@lexguard_postgres:5432/lexguard
       - REDIS_URL=redis://lexguard_redis:6379/0
       - CELERY_BROKER_URL=redis://lexguard_redis:6379/0
