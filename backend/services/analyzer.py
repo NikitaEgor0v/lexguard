@@ -35,7 +35,7 @@ CONTRACT_TYPE_LABELS = frozenset({
     "лицензионный", "нда", "агентский", "иной",
 })
 
-CONTRACT_CLASSIFY_PROMPT = """Определи тип договора по фрагменту. Ответь ОДНИМ словом из списка, без пояснений и пунктуации:
+CONTRACT_CLASSIFY_PROMPT = """Это выдержки из начала и середины документа. Определи тип договора по фрагментам. Ответь ОДНИМ словом из списка, без пояснений и пунктуации:
 услуги, подряд, поставка, аренда, трудовой, лицензионный, нда, агентский, иной
 
 Текст:
@@ -195,10 +195,9 @@ class AnalyzerService:
     def _classify_contract_type(self, segments: list[str]) -> str:
         if not segments:
             return "иной"
-        if len(segments) >= 2:
-            preview = f"{segments[0]}\n\n{segments[1]}"[:MAX_CLASSIFY_PREVIEW_CHARS]
-        else:
-            preview = segments[0][:MAX_CLASSIFY_PREVIEW_CHARS]
+        from services.preprocessor import PreprocessorService
+        full_text = "\n\n".join(segments)
+        preview = PreprocessorService.extract_smart_classification_preview(full_text)
         if not preview.strip():
             return "иной"
         payload = {

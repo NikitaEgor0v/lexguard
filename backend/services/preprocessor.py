@@ -1,6 +1,7 @@
 import re
 import io
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +10,52 @@ class PreprocessorService:
     MIN_SEGMENT_LENGTH = 80
     TARGET_SEGMENT_LENGTH = 400
     MAX_SEGMENT_LENGTH = 600
+
+    @staticmethod
+    def extract_smart_classification_preview(text: str) -> str:
+        markers = []
+        if re.search(r'(?i)\bарендодатель\b|\bарендатор\b', text):
+            markers.append("аренда")
+        if re.search(r'(?i)\bзаказчик\b|\bисполнитель\b|\bподрядчик\b', text):
+            markers.append("услуги/подряд")
+        if re.search(r'(?i)\bпоставщик\b|\bпокупатель\b', text):
+            markers.append("поставка")
+        if re.search(r'(?i)\bработник\b|\bработодатель\b', text):
+            markers.append("трудовой")
+        if re.search(r'(?i)\bлицензиар\b|\bлицензиат\b', text):
+            markers.append("лицензионный")
+        if re.search(r'(?i)\bпринципал\b|\bагент\b', text):
+            markers.append("агентский")
+        if re.search(r'(?i)\bnda\b|\bконфиденциальност\w*\b|\bкоммерческ\w*\s+тайн\w*\b', text):
+            markers.append("нда")
+
+        start_text = text[:400]
+        
+        mid_text = ""
+        if len(text) > 800:
+            possible_start = min(400, len(text) - 200)
+            possible_end = max(possible_start, len(text) - 200)
+            if possible_end > possible_start:
+                rand_idx = random.randint(possible_start, possible_end)
+                mid_text = text[rand_idx:rand_idx+200]
+            else:
+                mid_text = text[possible_start:possible_start+200]
+        
+        liability_text = ""
+        liability_match = re.search(r'(?i)(.{0,50}(?:ответственность\s+сторон|неустойка|штраф).{0,150})', text)
+        if liability_match:
+            liability_text = liability_match.group(1)
+        
+        markers_str = ", ".join(markers) if markers else "не найдены"
+        
+        preview = f"[МАРКЕРЫ]: {markers_str}\n"
+        preview += f"[НАЧАЛО]: {start_text}\n"
+        if mid_text:
+            preview += f"[СЕРЕДИНА]: {mid_text}\n"
+        if liability_text:
+            preview += f"[ОТВЕТСТВЕННОСТЬ]: {liability_text}\n"
+            
+        return preview[:1500]
 
     def process(self, content: bytes, filename: str) -> list[str]:
         if filename.lower().endswith(".pdf"):
