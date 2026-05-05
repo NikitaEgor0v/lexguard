@@ -102,6 +102,7 @@ class RiskItemDB(Base):
     risk_description = Column(Text, nullable=True)
     recommendation = Column(Text, nullable=True)
     rag_context = Column(Text, nullable=True)
+    safe_redaction = Column(Text, nullable=True)
 
     # Relationship
     analysis = relationship("AnalysisResultDB", back_populates="risks")

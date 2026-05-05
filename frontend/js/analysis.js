@@ -410,6 +410,16 @@ window.analysis = {
             <span class="risk-detail-label">Контекст RAG</span>
             <div class="rag-context">${risk.rag_context}</div>
           </div>` : ''}
+          ${risk.safe_redaction ? `
+          <div class="risk-detail-row safe-redaction-row">
+            <span class="risk-detail-label">Исправленный текст</span>
+            <div class="safe-redaction-box">
+              <div class="safe-redaction-text">${this.escapeHtml(risk.safe_redaction)}</div>
+              <button class="safe-redaction-copy-btn" onclick="event.stopPropagation(); window.analysis.copySafeRedaction(this, ${JSON.stringify(risk.safe_redaction).replace(/</g, '\\u003c')})" title="Скопировать безопасную формулировку">
+                <span class="copy-icon">📋</span> Скопировать
+              </button>
+            </div>
+          </div>` : ''}
         </div>
       </div>
     `;
@@ -461,6 +471,35 @@ window.analysis = {
         document.querySelectorAll('.highlight-segment').forEach((el) => el.classList.remove('active'));
       }
     }
+  },
+
+  copySafeRedaction(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span class="copy-icon">✓</span> Скопировано';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(() => {
+      // Fallback for older browsers / non-HTTPS contexts
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span class="copy-icon">✓</span> Скопировано';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
   },
 
   exportJSON() {

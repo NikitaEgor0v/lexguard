@@ -692,6 +692,65 @@
   line-height: 1.6;
 }
 
+/* Safe Redaction ("Исправь меня") Block */
+.safe-redaction-row {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.safe-redaction-row .risk-detail-label {
+  width: auto;
+  color: var(--success);
+}
+
+.safe-redaction-box {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.03));
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 8px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+.safe-redaction-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+
+.safe-redaction-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+  color: var(--success);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.safe-redaction-copy-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.safe-redaction-copy-btn.copied {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.copy-icon {
+  font-size: 13px;
+}
+
 /* Chat Styling */
 .chat-divider {
   display: flex;

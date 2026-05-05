@@ -46,7 +46,7 @@
 
 * **Users (`users`)**: Управление доступом. Пароли хэшируются с применением `bcrypt`.
 * **Documents (`user_documents`)**: Метаданные загруженных пользовательских эталонов для персонального RAG. Сами эмбеддинги лежат в Qdrant, но связь установлена через `document_id`.
-* **Analysis Results (`analysis_results` & `risk_items`)**: Связь один-ко-многим. В таблице results хранится сводный скоринг (score, counts), а в risks — детальная разбивка каждого пункта с его уровнем (`high`, `medium`, `low`, `none`) и категорией (Финансовый, Операционный и т.д.).
+* **Analysis Results (`analysis_results` & `risk_items`)**: Связь один-ко-многим. В таблице results хранится сводный скоринг (score, counts), а в risks — детальная разбивка каждого пункта с его уровнем (`high`, `medium`, `low`, `none`), категорией (Финансовый, Операционный и т.д.) и безопасной формулировкой (`safe_redaction`) — предложенным LLM переписанным текстом для устранения риска.
 * **Chat History (`chat_sessions` & `chat_messages`)**: Персистентная история. `ChatRepository.create_session` работает по паттерну `Get-or-Create`.
 
 ---

@@ -66,6 +66,7 @@ class AnalysisRepository:
                     risk_description=risk.risk_description,
                     recommendation=risk.recommendation,
                     rag_context=risk.rag_context,
+                    safe_redaction=risk.safe_redaction,
                 )
             )
         db.commit()
@@ -130,6 +131,7 @@ class AnalysisRepository:
                 risk_description=r.risk_description,
                 recommendation=r.recommendation,
                 rag_context=r.rag_context,
+                safe_redaction=r.safe_redaction,
             )
             for r in row.risks
         ]

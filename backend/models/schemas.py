@@ -27,6 +27,7 @@ class RiskItem(BaseModel):
     risk_description: Optional[str] = None
     recommendation: Optional[str] = None
     rag_context: Optional[str] = None
+    safe_redaction: Optional[str] = None
 
 
 class AnalysisSummary(BaseModel):
