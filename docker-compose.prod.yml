@@ -1,0 +1,29 @@
+services:
+  # ── Close all internal ports from external access ──
+  redis:
+    ports: []
+
+  postgres:
+    ports: []
+
+  qdrant:
+    ports: []
+
+  ollama:
+    ports: []
+
+  # ── Backend: remove dev volume mount, close external port ──
+  backend:
+    ports: []
+    volumes: []
+
+  # ── Celery: remove dev volume mount ──
+  celery_worker:
+    volumes: []
+
+  # ── Frontend: serve on port 80, remove dev volume mount ──
+  frontend:
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf

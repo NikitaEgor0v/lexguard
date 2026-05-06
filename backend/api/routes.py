@@ -5,7 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from config.database import get_db
 from config.security import get_current_user
 from models.db_models import UserDB
-from services.analyzer import AnalyzerService
+from services.analyzer import AnalyzerService, MAX_SEGMENTS_PER_DOCUMENT
 from services.preprocessor import PreprocessorService
 from services.risk_grouping import group_analysis_risks
 from models.schemas import AnalysisResponse, AnalysisStatus
@@ -16,7 +16,6 @@ router = APIRouter()
 analyzer = AnalyzerService()
 preprocessor = PreprocessorService()
 logger = logging.getLogger(__name__)
-MAX_SEGMENTS_PER_DOCUMENT = 80
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
@@ -42,7 +41,9 @@ async def analyze_document(
 
     if not segments:
         raise HTTPException(status_code=422, detail="Документ пустой или нечитаемый")
-    if len(segments) > MAX_SEGMENTS_PER_DOCUMENT:
+
+    # Configurable upper bound; 0 means unlimited.
+    if MAX_SEGMENTS_PER_DOCUMENT > 0 and len(segments) > MAX_SEGMENTS_PER_DOCUMENT:
         raise HTTPException(
             status_code=422,
             detail=f"Документ слишком большой для анализа (сегментов: {len(segments)}, максимум: {MAX_SEGMENTS_PER_DOCUMENT})",
@@ -66,7 +67,7 @@ async def analyze_document(
         
         # Submit to Celery
         task = analyze_document_task.delay(segments, analysis_id, filename, uid_str)
-        logger.info("Sent analysis %s to Celery (Task ID: %s)", analysis_id, task.id)
+        logger.info("Sent analysis %s to Celery (Task ID: %s), segments: %d", analysis_id, task.id, len(segments))
         
     except Exception as e:
         logger.exception("Unexpected analysis start failure")
@@ -192,10 +193,73 @@ def get_analysis_grouped(
     db: Session = Depends(get_db),
     current_user: UserDB = Depends(get_current_user),
 ):
+    """Return grouped risk data.
+
+    If the analysis is still processing, returns partial results (the risks
+    that have been saved so far) with ``status: "processing"`` so the
+    frontend can render them incrementally.
+    """
+    from repositories.analysis_repository import AnalysisRepository
+
     result = analyzer.get_result(analysis_id, db=db)
-    if not result:
+
+    if result and result.status == "completed":
+        return group_analysis_risks(result)
+
+    # ── Partial results while still processing ──
+    partial = AnalysisRepository.get_partial_result(db, analysis_id)
+    if partial is None:
         raise HTTPException(status_code=404, detail="Результат анализа не найден")
-    return group_analysis_risks(result)
+
+    # If we have no risks yet, return a minimal response
+    if not partial["risks"]:
+        return {
+            "analysis_id": partial["analysis_id"],
+            "filename": partial["filename"],
+            "status": partial["status"],
+            "total_segments": partial["total_segments"],
+            "analyzed_segments": partial["analyzed_segments"],
+            "summary": None,
+            "executive_summary": None,
+            "groups": [],
+        }
+
+    # Build a temporary AnalysisResponse to use the existing grouping logic
+    from models.schemas import AnalysisSummary
+    from services.executive_summary import build_executive_summary
+
+    risks = partial["risks"]
+    risky = [r for r in risks if r.is_risky]
+    high = sum(1 for r in risks if r.risk_level.value == "high")
+    medium = sum(1 for r in risks if r.risk_level.value == "medium")
+    low = sum(1 for r in risks if r.risk_level.value == "low")
+    total_so_far = len(risks)
+    score = min(1.0, round((high * 1.0 + medium * 0.5 + low * 0.2) / max(total_so_far, 1), 2))
+
+    temp_summary = AnalysisSummary(
+        total_segments=partial["total_segments"],
+        risky_segments=len(risky),
+        high_risk_count=high,
+        medium_risk_count=medium,
+        low_risk_count=low,
+        risk_score=score,
+    )
+
+    temp_response = AnalysisResponse(
+        analysis_id=partial["analysis_id"],
+        filename=partial["filename"],
+        status=partial["status"],
+        summary=temp_summary,
+        executive_summary=None,  # Summary not ready until all segments are done
+        risks=risks,
+    )
+
+    grouped = group_analysis_risks(temp_response)
+    # Inject streaming metadata so frontend knows this is partial
+    grouped["status"] = partial["status"]
+    grouped["total_segments"] = partial["total_segments"]
+    grouped["analyzed_segments"] = partial["analyzed_segments"]
+    return grouped
 
 
 @router.get("/analyses")

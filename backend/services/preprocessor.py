@@ -7,9 +7,9 @@ logger = logging.getLogger(__name__)
 
 
 class PreprocessorService:
-    MIN_SEGMENT_LENGTH = 80
-    TARGET_SEGMENT_LENGTH = 400
-    MAX_SEGMENT_LENGTH = 600
+    MIN_SEGMENT_LENGTH = 150
+    TARGET_SEGMENT_LENGTH = 800
+    MAX_SEGMENT_LENGTH = 1200
 
     @staticmethod
     def extract_smart_classification_preview(text: str) -> str:

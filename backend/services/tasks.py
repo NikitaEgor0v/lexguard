@@ -16,6 +16,9 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
     """
     Background Celery task that performs document risk analysis.
     Creates its own DB session since it runs out of HTTP request context.
+
+    Processing happens in batches — each batch is saved to the DB
+    immediately so the frontend can start rendering partial results.
     """
     logger.info("Starting background analysis for %s (chunks: %d)", analysis_id, len(segments))
     
@@ -26,7 +29,7 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
         import uuid
         uid = uuid.UUID(user_id_str) if user_id_str else None
         
-        # This will save the result to the DB inside analyzer.analyze(...)
+        # This will save batches incrementally and finalize at the end
         analyzer.analyze(segments, analysis_id, filename, db=db, user_id=uid)
         logger.info("Analysis task %s completed successfully", analysis_id)
         
@@ -43,24 +46,31 @@ def analyze_document_task(self, segments: list[str], analysis_id: str, filename:
         return {"status": "completed", "analysis_id": analysis_id}
     except Exception as e:
         logger.exception("Analysis task %s failed", analysis_id)
+        # Mark the existing record as failed (it was created by the route handler)
         try:
             from models.db_models import AnalysisResultDB
-            import uuid
-            uid = uuid.UUID(user_id_str) if user_id_str else None
-            failed_analysis = AnalysisResultDB(
-                id=uuid.UUID(analysis_id),
-                user_id=uid,
-                filename=filename,
-                status="failed",
-                total_segments=len(segments),
-                risky_segments=0,
-                high_risk_count=0,
-                medium_risk_count=0,
-                low_risk_count=0,
-                risk_score=0.0
-            )
-            db.add(failed_analysis)
-            db.commit()
+            import uuid as _uuid
+            row = db.query(AnalysisResultDB).filter_by(id=_uuid.UUID(analysis_id)).first()
+            if row:
+                row.status = "failed"
+                db.commit()
+            else:
+                # Should not happen, but just in case
+                uid = _uuid.UUID(user_id_str) if user_id_str else None
+                failed_analysis = AnalysisResultDB(
+                    id=_uuid.UUID(analysis_id),
+                    user_id=uid,
+                    filename=filename,
+                    status="failed",
+                    total_segments=len(segments),
+                    risky_segments=0,
+                    high_risk_count=0,
+                    medium_risk_count=0,
+                    low_risk_count=0,
+                    risk_score=0.0,
+                )
+                db.add(failed_analysis)
+                db.commit()
         except Exception as db_err:
             logger.error("Failed to save error state to DB: %s", db_err)
             

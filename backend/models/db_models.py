@@ -59,6 +59,7 @@ class AnalysisResultDB(Base):
     medium_risk_count = Column(Integer, nullable=False, default=0)
     low_risk_count = Column(Integer, nullable=False, default=0)
     risk_score = Column(Float, nullable=False, default=0.0)
+    analyzed_segments = Column(Integer, nullable=False, default=0)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 

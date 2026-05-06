@@ -102,15 +102,30 @@ class RAGService:
         resolved.update(UNIVERSAL_CONTRACT_TYPES)
         return sorted(resolved)
 
-    def search(self, query: str, contract_type: str = "иной", top_k: int = 3, user_id: UUID | None = None) -> str | None:
-        """Поиск релевантных норм в базе Qdrant, включая пользовательские эталоны."""
+    def search(
+        self,
+        query: str,
+        contract_type: str = "иной",
+        top_k: int | None = None,
+        user_id: UUID | None = None,
+        max_chars: int | None = None,
+    ) -> str | None:
+        """Поиск релевантных норм в базе Qdrant, включая пользовательские эталоны.
+
+        Args:
+            top_k: Number of norms to retrieve (defaults to module-level TOP_K).
+            max_chars: Soft limit on total context length; truncation happens
+                       at norm boundaries so no norm is ever cut mid-text.
+        """
         if not self._ready or not self._encoder:
             return None
-        
+
+        effective_top_k = top_k if top_k is not None else TOP_K
+
         try:
             # 1. Search standard legal norms
             from qdrant_client.models import Filter, FieldCondition, MatchAny
-            
+
             qv = self._encoder.encode(f"query: {query}", show_progress_bar=False).tolist()
             filter_obj = None
             allowed_types = self._resolve_filter_contract_types(contract_type)
@@ -123,17 +138,17 @@ class RAGService:
                         )
                     ]
                 )
-                
+
             results = self._client.search(
                 collection_name=COLLECTION_NAME,
                 query_vector=qv,
                 query_filter=filter_obj,
-                limit=top_k,
+                limit=effective_top_k,
                 score_threshold=SCORE_THRESHOLD,
             )
-            
-            parts = []
-            
+
+            parts: list[str] = []
+
             # 2. Add custom user documents if user_id is provided
             if user_id:
                 from services.document_service import DocumentService
@@ -143,30 +158,64 @@ class RAGService:
                 )
                 if user_context:
                     parts.append(user_context)
-                    
-            # 3. Add standard legal norms
+
+            # 3. Add standard legal norms — compact format to fit small context windows
             for hit in results:
                 p = hit.payload
                 criticality = str(p.get("criticality", "medium")).upper()
                 deception_patterns = p.get("deception_patterns") or []
                 legal_basis = p.get("legal_basis") or []
+                # Concise deception text — only first 2 patterns to save space
                 deception_text = ""
                 if isinstance(deception_patterns, list) and deception_patterns:
-                    deception_text = "\nУловки/паттерны: " + "; ".join(str(x) for x in deception_patterns[:3])
-                legal_basis_text = ""
-                if isinstance(legal_basis, list) and legal_basis:
-                    legal_basis_text = "\nПравовое основание: " + "; ".join(str(x) for x in legal_basis[:4])
+                    deception_text = " Уловки: " + "; ".join(str(x) for x in deception_patterns[:2])
+                # Concise legal basis — only first 2 specific references (skip generic ГК 309/310/421)
+                specific_legal = [lb for lb in legal_basis if lb not in (
+                    "ГК РФ ст. 309", "ГК РФ ст. 310", "ГК РФ ст. 421",
+                    "ГК РФ ст. 431", "ГК РФ ст. 432", "ГК РФ ст. 450", "ГК РФ ст. 452",
+                )] if isinstance(legal_basis, list) else []
+                legal_text = ""
+                if specific_legal:
+                    legal_text = " Основание: " + "; ".join(str(x) for x in specific_legal[:2])
                 parts.append(
-                    f"[{p.get('risk_category', 'неизвестно').upper()} | {p.get('topic', 'без темы')} | Критичность: {criticality}]\n"
-                    f"Эталон: {p.get('safe_norm', '')}\n"
-                    f"Признак риска: {p.get('risky_pattern', '')}"
+                    f"[{p.get('risk_category', '?').upper()} | {p.get('topic', '?')} | {criticality}] "
+                    f"Эталон: {p.get('safe_norm', '')} "
+                    f"Риск: {p.get('risky_pattern', '')}"
                     f"{deception_text}"
-                    f"{legal_basis_text}"
+                    f"{legal_text}"
                 )
-            return "\n\n".join(parts) if parts else None
+
+            if not parts:
+                return None
+
+            # Smart truncation: drop trailing norms that don't fit, never cut mid-norm
+            return self._truncate_by_norm_boundaries(parts, max_chars)
         except Exception as e:
             logger.error(f"Qdrant error: {e}")
             return self._fallback(query)
+
+    @staticmethod
+    def _truncate_by_norm_boundaries(parts: list[str], max_chars: int | None) -> str:
+        """Join norm parts, dropping trailing ones if total exceeds max_chars.
+
+        Unlike naive [:max_chars] slicing, this never cuts a norm mid-sentence.
+        """
+        if max_chars is None or max_chars <= 0:
+            return "\n\n".join(parts)
+
+        result_parts: list[str] = []
+        total_len = 0
+        separator_len = 2  # len("\n\n")
+
+        for part in parts:
+            added_len = len(part) + (separator_len if result_parts else 0)
+            if total_len + added_len > max_chars and result_parts:
+                # Already have at least one norm; stop adding more
+                break
+            result_parts.append(part)
+            total_len += added_len
+
+        return "\n\n".join(result_parts)
 
     def _fallback(self, segment: str) -> str | None:
         kw = {

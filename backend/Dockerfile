@@ -17,4 +17,6 @@ COPY . .
 
 RUN touch api/__init__.py models/__init__.py services/__init__.py config/__init__.py repositories/__init__.py
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]

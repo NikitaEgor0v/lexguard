@@ -5,6 +5,8 @@ window.analysis = {
   activeCategoryFilter: 'all',
   highlightMode: false,
   selectedSegmentId: null,
+  // Track which segment IDs have already been rendered (for incremental streaming)
+  _renderedSegmentIds: new Set(),
   categoryLabels: {
     all: 'Все категории',
     financial: 'Финансы',
@@ -20,7 +22,6 @@ window.analysis = {
   async start() {
     if (!window.upload.currentFile) return;
     
-    // Requires Auth for full usage, API will intercept 401 if missing.
     window.app.hideError();
     this.setLoading(true);
 
@@ -28,13 +29,10 @@ window.analysis = {
     formData.append('file', window.upload.currentFile);
 
     try {
-      // Setup polling instead of simple fetch since Celery pushes to background
-      // Update: Celery is task 6, we will implement frontend polling here assuming the API returns 202
       let result = null;
       const respRaw = await fetch('/api/v1/analyze', { 
         method: 'POST', 
         body: formData,
-        // include cookie auth
         headers: { 'Accept': 'application/json' }
       });
       
@@ -51,14 +49,13 @@ window.analysis = {
       if (respRaw.status === 202) {
         const initData = await respRaw.json();
         
-        // Extraction and segmentation are done synchronously.
         document.getElementById('step1').className = 'loading-step done';
         document.getElementById('step2').className = 'loading-step done';
         document.getElementById('step3').className = 'loading-step active';
         this.setProgress(10, 'Инициализация LLM...');
         
         result = await this.pollResult(initData.analysis_id);
-        if (!result) return; // Polling was cancelled by another action
+        if (!result) return;
       } else {
         result = await respRaw.json();
       }
@@ -79,7 +76,11 @@ window.analysis = {
   
   async pollResult(analysis_id) {
     this.currentPollingId = analysis_id;
-    const maxAttempts = 1200; // 1200 * 3s = 60 minutes
+    this._renderedSegmentIds = new Set();
+    // Track last known count to detect new batches arriving
+    let lastKnownRiskCount = 0;
+
+    const maxAttempts = 1200;
     for (let i = 0; i < maxAttempts; i++) {
         if (this.currentPollingId !== analysis_id) return null;
         
@@ -90,8 +91,9 @@ window.analysis = {
         const res = await window.api.fetch(`/analyze/${analysis_id}`);
         
         if (res.status === 'completed' || res.analysis_id && !res.status) {
-            // It might return the full AnalysisResponse directly
-            return res.analysis_id ? res : res.result; 
+            // Final result — fetch full grouped data for complete render
+            const grouped = await window.api.fetch(`/analyze/${analysis_id}/grouped`);
+            return grouped.analysis_id ? grouped : res;
         }
         if (res.status === 'failed') {
             const msg = res.message || 'Произошёл сбой при анализе. Попробуйте снова.';
@@ -99,14 +101,11 @@ window.analysis = {
         }
         
         if (res.status === 'processing') {
-             // Real progress updating from server
              let rawPct = res.progress_percent || 0;
-             // Scale from 10% to 100% since we already advanced past step 1 & 2
              let pct = 10 + Math.floor(rawPct * 0.9);
              let label = res.progress_label || 'Обработка в фоне...';
              this.setProgress(pct, label);
              
-             // Update step visuals dynamically
              document.getElementById('step1').className = 'loading-step done';
              document.getElementById('step2').className = 'loading-step done';
              
@@ -120,9 +119,76 @@ window.analysis = {
              } else {
                  document.getElementById('step3').className = 'loading-step active';
              }
+
+             // ── Incremental rendering: fetch partial grouped results ──
+             if (rawPct > 0) {
+                 try {
+                     const partial = await window.api.fetch(`/analyze/${analysis_id}/grouped`);
+                     if (partial && partial.groups && partial.groups.length > 0) {
+                         const allRisks = partial.groups.flatMap(g => g.risks || []);
+                         if (allRisks.length > lastKnownRiskCount) {
+                             lastKnownRiskCount = allRisks.length;
+                             this._renderPartialResults(partial);
+                         }
+                     }
+                 } catch (_) {
+                     // Partial results not available yet — that's ok
+                 }
+             }
         }
     }
     throw new Error('Превышено время ожидания результатов (60 минут)');
+  },
+
+  /** Render partial results while analysis is still running */
+  _renderPartialResults(partial) {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'block';
+
+    // Show summary section with partial counts
+    const summarySection = document.getElementById('summarySection');
+    summarySection.style.display = 'flex';
+
+    const s = partial.summary;
+    if (s) {
+        document.getElementById('statTotal').textContent = `${partial.analyzed_segments || '?'}/${partial.total_segments || '?'}`;
+        document.getElementById('statRisky').textContent = s.risky_segments || 0;
+        document.getElementById('statHigh').textContent = s.high_risk_count || 0;
+        document.getElementById('statMedium').textContent = s.medium_risk_count || 0;
+        document.getElementById('resultsFilename').textContent = partial.filename || '';
+
+        const score = s.risk_score || 0;
+        const scoreEl = document.getElementById('scoreValue');
+        scoreEl.textContent = score.toFixed(2);
+        const fill = document.getElementById('scoreFill');
+        fill.style.width = (score * 100) + '%';
+        if (score > 0.6) { fill.style.background = 'var(--high)'; scoreEl.style.color = 'var(--high)'; }
+        else if (score > 0.3) { fill.style.background = 'var(--medium)'; scoreEl.style.color = 'var(--medium)'; }
+        else { fill.style.background = 'var(--accent)'; scoreEl.style.color = 'var(--accent)'; }
+    }
+
+    // Hide executive summary until analysis is fully complete
+    const execWrap = document.getElementById('executiveSummary');
+    if (execWrap) {
+        const textEl = document.getElementById('executiveSummaryText');
+        if (textEl) textEl.textContent = 'Сводка будет доступна после завершения анализа всех сегментов…';
+        execWrap.style.display = 'block';
+    }
+
+    // Append only new risk cards
+    const list = document.getElementById('riskList');
+    const allRisks = partial.groups.flatMap(g => (g.risks || []).map(r => typeof r === 'object' && r.segment_id ? r : null)).filter(Boolean);
+
+    allRisks.forEach((risk) => {
+        if (this._renderedSegmentIds.has(risk.segment_id)) return;
+        this._renderedSegmentIds.add(risk.segment_id);
+        const card = this.createRiskCard(risk, this._renderedSegmentIds.size - 1);
+        list.appendChild(card);
+    });
+
+    // Rebuild category filters based on what we have so far
+    this.renderCategoryFilters(allRisks);
+    this.applyFilters();
   },
 
   setLoading(on) {
@@ -147,10 +213,20 @@ window.analysis = {
   renderResults(data) {
     this.currentResult = data;
     this.selectedSegmentId = null;
+    this._renderedSegmentIds = new Set();
     
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('resultsSection').style.display = 'block';
     document.getElementById('summarySection').style.display = 'flex';
+
+    // If data came from /grouped endpoint it has `groups` instead of flat `risks`
+    let risks = data.risks;
+    if (!risks && data.groups) {
+      risks = data.groups.flatMap(g => g.risks || []);
+    }
+    if (!risks) risks = [];
+    // Store flat risks back for other methods
+    data.risks = risks;
 
     // Summary
     const s = data.summary;
@@ -171,20 +247,21 @@ window.analysis = {
     else { fill.style.background = 'var(--accent)'; scoreEl.style.color = 'var(--accent)'; }
 
     this.renderExecutiveSummary(data);
-    this.renderCategoryFilters(data.risks);
-    this.renderHighlightMap(data.risks);
+    this.renderCategoryFilters(risks);
+    this.renderHighlightMap(risks);
     this.updateHighlightModeUI();
 
     // Risk list
     const list = document.getElementById('riskList');
     list.innerHTML = '';
-    data.risks.forEach((risk, idx) => {
+    risks.forEach((risk, idx) => {
       list.appendChild(this.createRiskCard(risk, idx));
     });
 
     this.applyFilters();
-    window.chat.initSession(data.analysis_id, data.risks);
-    if (window.historyAPI) window.historyAPI.setActive(data.analysis_id);
+    const analysisId = data.analysis_id;
+    window.chat.initSession(analysisId, risks);
+    if (window.historyAPI) window.historyAPI.setActive(analysisId);
   },
 
   normalizeCategory(rawCategory) {
@@ -208,7 +285,8 @@ window.analysis = {
       return;
     }
 
-    const riskyItems = data.risks.filter(item => item.is_risky);
+    const risks = data.risks || [];
+    const riskyItems = risks.filter(item => item.is_risky);
     if (riskyItems.length === 0) {
       textEl.textContent = 'Договор выглядит низкорисковым: критичные формулировки не выявлены. Рекомендуется финальная ручная проверка перед подписанием.';
       wrap.style.display = 'block';
@@ -216,9 +294,10 @@ window.analysis = {
     }
 
     let riskBand = 'среднерисковый';
-    if (data.summary.high_risk_count > 0 || data.summary.risk_score >= 0.6) {
+    const summary = data.summary;
+    if (summary.high_risk_count > 0 || summary.risk_score >= 0.6) {
       riskBand = 'высокорисковый';
-    } else if (data.summary.risk_score <= 0.3) {
+    } else if (summary.risk_score <= 0.3) {
       riskBand = 'низкорисковый';
     }
 
@@ -245,7 +324,7 @@ window.analysis = {
       ? `Приоритетно проверить: ${topCritical.join('; ')}.`
       : 'Критичных пунктов не обнаружено, основной фокус на средних рисках.';
 
-    textEl.textContent = `Договор классифицирован как ${riskBand}: обнаружено ${riskyItems.length} риск-сегментов из ${data.summary.total_segments}. ${keyTopicsText} ${criticalText}`;
+    textEl.textContent = `Договор классифицирован как ${riskBand}: обнаружено ${riskyItems.length} риск-сегментов из ${summary.total_segments}. ${keyTopicsText} ${criticalText}`;
     wrap.style.display = 'block';
   },
 
@@ -333,7 +412,8 @@ window.analysis = {
       el.classList.toggle('active', Number(el.dataset.segmentId) === segmentId);
     });
 
-    const selected = this.currentResult.risks.find((item) => item.segment_id === segmentId);
+    const risks = this.currentResult.risks || [];
+    const selected = risks.find((item) => item.segment_id === segmentId);
     const detail = document.getElementById('highlightDetail');
     if (selected && detail) {
       const category = selected.risk_category || 'без категории';
@@ -483,7 +563,6 @@ window.analysis = {
         btn.classList.remove('copied');
       }, 2000);
     }).catch(() => {
-      // Fallback for older browsers / non-HTTPS contexts
       const textarea = document.createElement('textarea');
       textarea.value = text;
       textarea.style.position = 'fixed';

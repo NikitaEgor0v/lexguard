@@ -11,12 +11,12 @@ def build_executive_summary(summary: AnalysisSummary, risks: list[RiskItem]) -> 
             "Рекомендуется финальная ручная верификация перед подписанием."
         )
 
-    if summary.high_risk_count > 0 or summary.risk_score >= 0.6:
+    if summary.high_risk_count >= 3 or summary.risk_score >= 0.6:
         risk_band = "высокорисковый"
-    elif summary.risk_score <= 0.3:
-        risk_band = "низкорисковый"
-    else:
+    elif summary.high_risk_count > 0 or summary.risk_score > 0.3:
         risk_band = "среднерисковый"
+    else:
+        risk_band = "низкорисковый"
 
     category_labels = {
         "финансовый": "Финансы",
