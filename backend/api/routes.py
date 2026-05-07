@@ -229,7 +229,8 @@ def get_analysis_grouped(
     from services.executive_summary import build_executive_summary
 
     risks = partial["risks"]
-    risky = [r for r in risks if r.is_risky]
+    # is_risky=None (parse failure) treated as risky for stats
+    risky = [r for r in risks if r.is_risky is True or r.is_risky is None]
     high = sum(1 for r in risks if r.risk_level.value == "high")
     medium = sum(1 for r in risks if r.risk_level.value == "medium")
     low = sum(1 for r in risks if r.risk_level.value == "low")

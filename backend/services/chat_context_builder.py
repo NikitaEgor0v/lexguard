@@ -57,7 +57,8 @@ class ChatContextBuilder:
     def _build_risks_text(self, analysis: AnalysisResponse) -> str:
         lines: list[str] = []
         for item in analysis.risks:
-            if not item.is_risky:
+            # Skip only explicitly non-risky items
+            if item.is_risky is False:
                 continue
             category = item.risk_category.value if item.risk_category else "без категории"
             description = item.risk_description or "описание отсутствует"

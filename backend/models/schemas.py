@@ -21,7 +21,7 @@ class RiskCategory(str, Enum):
 class RiskItem(BaseModel):
     segment_id: int
     text: str
-    is_risky: bool
+    is_risky: Optional[bool]  # None = parse failure, needs manual review
     risk_level: RiskLevel
     risk_category: Optional[RiskCategory] = None
     risk_description: Optional[str] = None

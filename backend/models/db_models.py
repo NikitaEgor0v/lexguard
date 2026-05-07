@@ -97,7 +97,7 @@ class RiskItemDB(Base):
     )
     segment_id = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
-    is_risky = Column(Boolean, nullable=False, default=False)
+    is_risky = Column(Boolean, nullable=True)  # NULL = parse failure, needs review
     risk_level = Column(String(16), nullable=False, default="none")
     risk_category = Column(String(64), nullable=True)
     risk_description = Column(Text, nullable=True)

@@ -10,7 +10,9 @@ def group_analysis_risks(result: AnalysisResponse) -> dict:
     buckets: defaultdict[str, list] = defaultdict(list)
 
     for risk in result.risks:
-        if not risk.is_risky:
+        # Skip only explicitly non-risky items (is_risky=False)
+        # Include None (parse failures) for manual review
+        if risk.is_risky is False:
             continue
         category = risk.risk_category.value if risk.risk_category else "без категории"
         buckets[category].append(risk)

@@ -60,8 +60,8 @@ class TestHallucinationTrigger:
 
         # КРИТИЧЕСКАЯ ПРОВЕРКА: система не упала, вернула fallback RiskItem
         assert result.segment_id == 1
-        assert result.is_risky is True  # fallback помечает как рискованный
-        assert result.risk_level.value == "low"  # fallback = low
+        assert result.is_risky is None  # fallback returns None to avoid false positives
+        assert result.risk_level.value == "none"  # fallback = none
         assert result.risk_description is not None
 
     @patch("services.analyzer.requests.post")

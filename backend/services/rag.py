@@ -9,7 +9,10 @@ NORMS_PATH = Path(__file__).parent.parent / "data" / "legal_norms.json"
 COLLECTION_NAME = "legal_norms"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 TOP_K = 2
-SCORE_THRESHOLD = 0.55
+# Minimum cosine similarity for RAG results. Raised to 0.75 to reduce
+# false positives from loosely related norms contaminating unrelated segments.
+# Lower values (0.55-0.70) caused RAG to attach irrelevant norms to segments.
+SCORE_THRESHOLD = 0.75
 UNIVERSAL_CONTRACT_TYPES = ("все", "all", "any")
 CONTRACT_TYPE_ALIASES = {
     "услуги": ("услуги", "software_development", "outsourcing"),

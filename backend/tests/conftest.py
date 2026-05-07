@@ -55,7 +55,7 @@ def sample_analysis_response():
             ))
         summary = AnalysisSummary(
             total_segments=num_risks,
-            risky_segments=sum(1 for r in risks if r.is_risky),
+            risky_segments=sum(1 for r in risks if r.is_risky is True),
             high_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.HIGH),
             medium_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.MEDIUM),
             low_risk_count=sum(1 for r in risks if r.risk_level == RiskLevel.LOW),

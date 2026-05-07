@@ -27,10 +27,10 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
         use_compact_prompt=True,
     ),
     "gemma3:4b": ModelConfig(
-        context_window=128000, max_output=2048, safe_context=100000,
+        context_window=4096, max_output=1024, safe_context=3000,
         temperature=0.1,
-        max_segment_chars=1200, max_rag_chars=2000, max_rag_norms=4,
-        use_compact_prompt=False,
+        max_segment_chars=500, max_rag_chars=800, max_rag_norms=2,
+        use_compact_prompt=True,
     ),
     "gemma3:12b": ModelConfig(
         context_window=128000, max_output=2048, safe_context=100000,

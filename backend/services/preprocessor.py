@@ -2,14 +2,20 @@ import re
 import io
 import logging
 import random
+import os
+
+from config.model_registry import get_model_config
 
 logger = logging.getLogger(__name__)
 
 
 class PreprocessorService:
     MIN_SEGMENT_LENGTH = 150
-    TARGET_SEGMENT_LENGTH = 800
-    MAX_SEGMENT_LENGTH = 1200
+    # Dynamic segment limits based on active model capacity
+    MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
+    MODEL_CONFIG = get_model_config(MODEL_NAME)
+    TARGET_SEGMENT_LENGTH = MODEL_CONFIG.max_segment_chars
+    MAX_SEGMENT_LENGTH = int(MODEL_CONFIG.max_segment_chars * 1.5)
 
     @staticmethod
     def extract_smart_classification_preview(text: str) -> str:
@@ -217,6 +223,7 @@ class PreprocessorService:
         return segments
 
     def _split_by_sentences(self, text: str) -> list[str]:
+        """Split text by sentences, never cutting mid-word."""
         endings = re.compile(r"(?<=[.!?])\s+(?=[А-ЯA-Z\(«\"])")
         sentences = endings.split(text)
         segments, buffer = [], ""
@@ -236,9 +243,30 @@ class PreprocessorService:
         final_segments = []
         for seg in segments:
             if len(seg) > self.MAX_SEGMENT_LENGTH:
-                # Если предложение слишком длинное (нет знаков препинания), дробим его жестко
-                for i in range(0, len(seg), self.TARGET_SEGMENT_LENGTH):
-                    final_segments.append(seg[i:i+self.TARGET_SEGMENT_LENGTH])
+                # Split oversized segments at sentence boundaries (". ")
+                # Never cut mid-word — find last ". " before MAX_SEGMENT_LENGTH
+                remaining = seg
+                while remaining:
+                    if len(remaining) <= self.MAX_SEGMENT_LENGTH:
+                        final_segments.append(remaining)
+                        break
+                    
+                    # Find last sentence boundary before MAX_SEGMENT_LENGTH
+                    cutoff = remaining[:self.MAX_SEGMENT_LENGTH].rfind(". ")
+                    if cutoff > self.MIN_SEGMENT_LENGTH:
+                        # Found good boundary — split there
+                        final_segments.append(remaining[:cutoff + 1].strip())
+                        remaining = remaining[cutoff + 1:].strip()
+                    else:
+                        # No sentence boundary — split at last space before limit
+                        cutoff = remaining[:self.MAX_SEGMENT_LENGTH].rfind(" ")
+                        if cutoff > 0:
+                            final_segments.append(remaining[:cutoff].strip())
+                            remaining = remaining[cutoff:].strip()
+                        else:
+                            # No space found — emergency hard split (very rare)
+                            final_segments.append(remaining[:self.MAX_SEGMENT_LENGTH])
+                            remaining = remaining[self.MAX_SEGMENT_LENGTH:]
             else:
                 final_segments.append(seg)
                 

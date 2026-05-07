@@ -160,7 +160,7 @@ class TestMalformedLLMOutput:
         result = analyzer._parse(raw, "тест", 1, None)
         # Текст до JSON ломает json.loads → fallback
         assert result.segment_id == 1
-        assert result.is_risky is True  # fallback всегда помечает is_risky=True
+        assert result.is_risky is None  # fallback returns None to avoid false positives
 
     def test_parse_completely_invalid_response(self):
         """LLM вообще не возвращает JSON — просто текст на русском."""
@@ -171,8 +171,8 @@ class TestMalformedLLMOutput:
         result = analyzer._parse(raw, "тест", 1, None)
 
         assert result.segment_id == 1
-        assert result.is_risky is True  # fallback
-        assert result.risk_level == RiskLevel.LOW  # fallback level
+        assert result.is_risky is None  # fallback returns None to avoid false positives
+        assert result.risk_level == RiskLevel.NONE  # fallback level
         assert "Не удалось классифицировать" in result.risk_description
 
     def test_parse_empty_string(self):
@@ -182,7 +182,7 @@ class TestMalformedLLMOutput:
 
         result = analyzer._parse("", "тест", 1, None)
         assert result.segment_id == 1
-        assert result.is_risky is True
+        assert result.is_risky is None  # fallback returns None
 
     def test_parse_nested_json_with_extra_braces(self):
         """LLM возвращает JSON с лишними фигурными скобками."""
@@ -215,7 +215,7 @@ class TestMalformedLLMOutput:
         raw = '{"is_risky": true, "risk_le'
         result = analyzer._parse(raw, "тест", 1, None)
         assert result.segment_id == 1
-        assert result.is_risky is True  # fallback
+        assert result.is_risky is None  # fallback returns None
 
 
 # ═══════════════════════════════════════════════════════════════

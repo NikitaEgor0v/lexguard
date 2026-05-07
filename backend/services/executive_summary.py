@@ -4,7 +4,8 @@ from models.schemas import AnalysisSummary, RiskItem
 
 
 def build_executive_summary(summary: AnalysisSummary, risks: list[RiskItem]) -> str:
-    risky_items = [item for item in risks if item.is_risky]
+    # is_risky=None (parse failure) treated as risky for summary
+    risky_items = [item for item in risks if item.is_risky is True or item.is_risky is None]
     if not risky_items:
         return (
             "Договор выглядит низкорисковым: критичные формулировки не обнаружены. "
