@@ -27,7 +27,7 @@ def group_analysis_risks(result: AnalysisResponse) -> dict:
             "high": high,
             "medium": medium,
             "low": low,
-            "risks": items,
+            "risks": sorted(items, key=lambda x: x.segment_id),
         }
 
     groups = sorted(

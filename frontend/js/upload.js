@@ -55,7 +55,11 @@ window.upload = {
     
     document.getElementById('fileExt').textContent = ext.replace('.', '').toUpperCase();
     document.getElementById('fileName').textContent = file.name;
-    document.getElementById('analyzeBtn').disabled = false;
+    
+    // Show and enable the analyze button (it may be hidden after previous analysis)
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    analyzeBtn.style.display = 'flex';
+    analyzeBtn.disabled = false;
   },
 
   clearSelection() {

@@ -4,6 +4,7 @@ window.app = {
     this.bindEvents();
     window.auth.init();
     window.upload.init();
+    window.chat.init();
     this.checkStatus();
     setInterval(() => this.checkStatus(), 30000);
   },

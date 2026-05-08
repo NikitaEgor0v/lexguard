@@ -242,7 +242,7 @@ class AnalysisRepository:
                 rag_context=r.rag_context,
                 safe_redaction=r.safe_redaction,
             )
-            for r in row.risks
+            for r in sorted(row.risks, key=lambda x: x.segment_id)
         ]
         summary = AnalysisSummary(
             total_segments=row.total_segments,

@@ -3,6 +3,45 @@ window.chat = {
   sessionId: null,
   waiting: false,
   chipsVisible: true,
+  pendingSessions: {},
+
+  init() {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.waiting) {
+        this.refreshTypingIndicator();
+      }
+    });
+  },
+
+  refreshTypingIndicator() {
+    const indicator = document.getElementById('typingIndicator');
+    if (!indicator || !this.waiting) return;
+    
+    indicator.style.display = 'none';
+    void indicator.offsetHeight;
+    indicator.style.display = 'flex';
+    this.scrollToBottom();
+  },
+
+  isSessionPending(sessionId) {
+    return this.pendingSessions[sessionId]?.waiting === true;
+  },
+
+  setPendingState(sessionId, waiting, pendingMessage = null) {
+    if (!sessionId) return;
+    if (waiting) {
+      this.pendingSessions[sessionId] = { waiting: true, pendingMessage };
+    } else {
+      delete this.pendingSessions[sessionId];
+    }
+  },
+
+  /** Avoid duplicating the in-flight user bubble: API history often already includes it. */
+  pendingUserAlreadyInHistory(messages, pendingText) {
+    if (!pendingText || !messages || messages.length === 0) return false;
+    const last = messages[messages.length - 1];
+    return last.role === 'user' && String(last.content).trim() === String(pendingText).trim();
+  },
 
   async initSession(analysisId, risks = []) {
     this.sessionId = null;
@@ -33,10 +72,8 @@ window.chat = {
         body: JSON.stringify({ analysis_id: analysisId })
       });
       this.sessionId = data.session_id;
-      this.setInputState(true);
 
       if (data.messages && data.messages.length > 0) {
-        // Restore history context
         this.chipsVisible = false;
         document.getElementById('chatChips').style.display = 'none';
         data.messages.forEach(msg => {
@@ -44,7 +81,6 @@ window.chat = {
         });
         this.scrollToBottom();
       } else {
-        // Start fresh context
         const riskyCount = risks.filter(x => x.is_risky).length;
         const highCount = risks.filter(x => x.risk_level === 'high').length;
         
@@ -54,6 +90,23 @@ window.chat = {
         
         this.appendBubble('assistant', welcome);
       }
+
+      if (this.isSessionPending(this.sessionId)) {
+        const pending = this.pendingSessions[this.sessionId];
+        this.waiting = true;
+        this.setInputState(false);
+        const loaded = data.messages || [];
+        if (
+          pending.pendingMessage &&
+          !this.pendingUserAlreadyInHistory(loaded, pending.pendingMessage)
+        ) {
+          this.appendBubble('user', pending.pendingMessage);
+        }
+        typing.style.display = 'flex';
+        this.scrollToBottom();
+      } else {
+        this.setInputState(true);
+      }
     } catch (e) {
       this.appendBubble('assistant', 'Чат временно недоступен: ' + e.message, true);
     }
@@ -61,10 +114,11 @@ window.chat = {
 
   async restoreSession(sessionData) {
     this.sessionId = sessionData.session_id;
-    this.waiting = false;
     this.chipsVisible = false;
 
     const messagesEl = document.getElementById('chatMessages');
+    const typing = document.getElementById('typingIndicator');
+    
     messagesEl.innerHTML = '';
     document.getElementById('chatChips').style.display = 'none';
     document.getElementById('chatSection').style.display = 'block';
@@ -72,8 +126,25 @@ window.chat = {
     sessionData.messages.forEach(msg => {
       this.appendBubble(msg.role, msg.content);
     });
+
+    if (this.isSessionPending(this.sessionId)) {
+      const pending = this.pendingSessions[this.sessionId];
+      this.waiting = true;
+      this.setInputState(false);
+      const loaded = sessionData.messages || [];
+      if (
+        pending.pendingMessage &&
+        !this.pendingUserAlreadyInHistory(loaded, pending.pendingMessage)
+      ) {
+        this.appendBubble('user', pending.pendingMessage);
+      }
+      typing.style.display = 'flex';
+    } else {
+      this.waiting = false;
+      typing.style.display = 'none';
+      this.setInputState(true);
+    }
     
-    this.setInputState(true);
     this.scrollToBottom();
   },
 
@@ -115,28 +186,43 @@ window.chat = {
       this.chipsVisible = false;
     }
 
+    const currentSessionId = this.sessionId;
+
     input.value = '';
     this.autoResize(input);
     this.appendBubble('user', content);
 
     this.waiting = true;
+    this.setPendingState(currentSessionId, true, content);
     this.setInputState(false);
     document.getElementById('typingIndicator').style.display = 'flex';
     this.scrollToBottom();
 
     try {
-      const data = await window.api.fetch(`/chat/session/${this.sessionId}/message`, {
+      const data = await window.api.fetch(`/chat/session/${currentSessionId}/message`, {
         method: 'POST',
         body: JSON.stringify({ content })
       });
-      this.appendBubble('assistant', data.content || '');
+      
+      this.setPendingState(currentSessionId, false);
+      
+      if (this.sessionId === currentSessionId) {
+        this.appendBubble('assistant', data.content || '');
+        this.waiting = false;
+        document.getElementById('typingIndicator').style.display = 'none';
+        this.setInputState(true);
+        input.focus();
+      }
     } catch (e) {
-      this.appendBubble('assistant', 'Ошибка чата: ' + e.message, true);
-    } finally {
-      this.waiting = false;
-      document.getElementById('typingIndicator').style.display = 'none';
-      this.setInputState(true);
-      input.focus();
+      this.setPendingState(currentSessionId, false);
+      
+      if (this.sessionId === currentSessionId) {
+        this.appendBubble('assistant', 'Ошибка чата: ' + e.message, true);
+        this.waiting = false;
+        document.getElementById('typingIndicator').style.display = 'none';
+        this.setInputState(true);
+        input.focus();
+      }
     }
   },
 

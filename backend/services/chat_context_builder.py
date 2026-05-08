@@ -28,16 +28,26 @@ class ChatContextBuilder:
         contract_text = self._build_contract_text(analysis)
         contract_excerpt = contract_text[:max_contract_chars]
         
-        # Capping risks text to 1000 chars 
-        risks_text = self._build_risks_text(analysis)[:1000]
+        # Capping risks text - increased to accommodate risk numbers and previews
+        risks_text = self._build_risks_text(analysis)[:2000]
 
         return (
             "Ты юридический ассистент системы LexGuard.\n"
             "Отвечай СТРОГО на русском языке, даже если вопрос задан на другом языке.\n"
-            "Не переходи на английский и не смешивай языки.\n"
-            "Используй только контекст договора и результатов анализа.\n"
-            "Будь конкретным, ссылайся на фрагменты договора.\n"
-            "Не выдумывай риски, которых нет в анализе.\n\n"
+            "Не переходи на английский и не смешивай языки.\n\n"
+            "Твои возможности:\n"
+            "- Отвечать на вопросы о договоре и результатах анализа\n"
+            "- Генерировать исправленные формулировки пунктов договора\n"
+            "- Предлагать альтернативные варианты текста, соответствующие законодательству РФ\n"
+            "- Объяснять риски и давать рекомендации по их устранению\n"
+            "- Помогать с любыми юридическими вопросами в контексте договора\n\n"
+            "Правила:\n"
+            "- При генерации текста пунктов опирайся на нормы ГК РФ и лучшие практики\n"
+            "- При ответе на вопросы о рисках используй результаты анализа\n"
+            "- Будь конкретным, ссылайся на фрагменты договора где уместно\n"
+            "- Не выдумывай риски, которых нет в анализе\n"
+            "- Если просят сгенерировать текст — генерируй готовый к использованию текст\n"
+            "- Когда пользователь говорит 'риск №N' или 'N-й риск', он имеет в виду риск из списка ниже с номером N\n\n"
             f"ID анализа: {analysis.analysis_id}\n"
             f"Файл: {analysis.filename}\n\n"
             f"Фрагменты договора:\n{contract_excerpt}\n\n"
@@ -56,11 +66,18 @@ class ChatContextBuilder:
 
     def _build_risks_text(self, analysis: AnalysisResponse) -> str:
         lines: list[str] = []
+        risk_number = 0
         for item in analysis.risks:
             # Skip only explicitly non-risky items
             if item.is_risky is False:
                 continue
+            risk_number += 1
             category = item.risk_category.value if item.risk_category else "без категории"
             description = item.risk_description or "описание отсутствует"
-            lines.append(f"#{item.segment_id} [{item.risk_level.value}] {category}: {description}")
+            # Include both display number and segment reference for clarity
+            text_preview = item.text[:100].strip() if item.text else ""
+            lines.append(
+                f"Риск №{risk_number} (сегмент {item.segment_id}) [{item.risk_level.value}] "
+                f"{category}: {description}\n  Текст: \"{text_preview}...\""
+            )
         return "\n".join(lines) if lines else "Риски не обнаружены."

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from uuid import UUID
@@ -16,7 +17,8 @@ from services.chat_context_builder import ChatContextBuilder
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = "http://ollama:11434/api/generate"
+# Unified Ollama endpoint (configurable via env)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434") + "/api/generate"
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -87,9 +89,10 @@ class ChatService:
                 "num_ctx": self.model_config.context_window,
             },
         }
+        request_timeout = int(os.getenv("LLM_REQUEST_TIMEOUT", "300"))
         started = time.monotonic()
         try:
-            resp = requests.post(OLLAMA_URL, json=payload, timeout=180)
+            resp = requests.post(OLLAMA_URL, json=payload, timeout=request_timeout)
             resp.raise_for_status()
             body = resp.json()
             answer = (body.get("response") or "").strip()

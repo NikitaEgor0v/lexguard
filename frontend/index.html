@@ -205,8 +205,6 @@
             <div class="results-filename" id="resultsFilename"></div>
           </div>
           <div class="results-actions">
-            <button class="btn-outline" id="highlightModeBtn" onclick="window.analysis.toggleHighlightMode()">Режим
-              разметки</button>
             <button class="btn-outline" onclick="window.analysis.exportJSON()">Экспорт JSON</button>
           </div>
         </div>
@@ -221,6 +219,8 @@
         <div class="filters">
           <button class="filter-btn active" data-filter="all"
             onclick="window.analysis.setFilter('all', this)">Все</button>
+          <button class="filter-btn" data-filter="risky"
+            onclick="window.analysis.setFilter('risky', this)">Риски</button>
           <button class="filter-btn f-high" data-filter="high"
             onclick="window.analysis.setFilter('high', this)">Высокий</button>
           <button class="filter-btn f-medium" data-filter="medium"
@@ -229,18 +229,6 @@
             onclick="window.analysis.setFilter('low', this)">Низкий</button>
           <button class="filter-btn" data-filter="none" onclick="window.analysis.setFilter('none', this)">Без
             риска</button>
-        </div>
-
-        <div class="highlight-wrap" id="highlightWrap" style="display:none;">
-          <div class="highlight-pane">
-            <div class="highlight-title">Текст договора (сегменты)</div>
-            <div class="highlight-source-list" id="highlightSourceList"></div>
-          </div>
-          <div class="highlight-pane">
-            <div class="highlight-title">Пояснение по сегменту</div>
-            <div class="highlight-detail" id="highlightDetail">Выберите сегмент слева, чтобы открыть объяснение риска и
-              перейти к карточке.</div>
-          </div>
         </div>
 
         <div class="risk-list" id="riskList"></div>
@@ -256,6 +244,7 @@
 
         <div class="chat-bubble assistant typing-bubble" id="typingIndicator" style="display:none">
           <span></span><span></span><span></span>
+          <span class="typing-text">Ассистент думает...</span>
         </div>
 
         <div class="chat-input-wrap">

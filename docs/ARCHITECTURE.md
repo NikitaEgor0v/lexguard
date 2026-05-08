@@ -16,11 +16,11 @@
 
 ### Поток данных (Data Flow)
 Краткий жизненный цикл обработки документа:
-`Upload → FastAPI → Preprocessor (разбиение на сегменты) → Celery Queue → Redis (статус) → Пакетный цикл [ ThreadPool (параллельная обработка пачки) → Qdrant Vector Search → Ollama RAG Generation → JSON Parse → PostgreSQL Save (инкрементально) ] → Финализация (summary + executive_summary) → Frontend`
+`Upload → FastAPI → Preprocessor (разбиение на сегменты) → Celery Queue → Redis (статус/heartbeat) → Последовательный цикл [ Qdrant Vector Search (system + user docs) → Ollama RAG Generation → JSON Parse → Batch Buffer ] → PostgreSQL Save (инкрементально каждые BATCH_SIZE сегментов) → Финализация (summary + executive_summary) → Frontend`
 
-> **P1:** Сегменты анализируются параллельно через `ThreadPoolExecutor` (по умолчанию 3 потока, настраивается через `LLM_MAX_WORKERS`). Прогресс обновляется в Redis атомарно через `INCR`.
+> **Режим обработки:** Сегменты анализируются **последовательно** (один за другим). Это обеспечивает максимальную стабильность на слабом железе и позволяет GPU получить все ресурсы на каждый запрос. Прогресс обновляется в Redis через `SETEX`.
 >
-> **P3 (Бесконечная лента):** Документ разбивается на пакеты по `ANALYSIS_BATCH_SIZE` (по умолчанию 20) сегментов. Каждый пакет анализируется параллельно, и результаты немедленно сохраняются в PostgreSQL. Фронтенд подгружает риски по мере их появления в БД, не дожидаясь завершения всего анализа. Executive Summary генерируется только после обработки последнего пакета.
+> **Инкрементальное сохранение (P1):** Документ обрабатывается последовательно, но результаты сохраняются в PostgreSQL **пакетами** по `ANALYSIS_BATCH_SIZE` (по умолчанию 20) сегментов. Фронтенд подгружает риски по мере их появления в БД через `/analyze/{id}/grouped`, не дожидаясь завершения всего анализа. Executive Summary генерируется только после обработки последнего сегмента.
 
 Подробнее о потоках данных можно прочитать в [API_AND_DATA_FLOW.md](API_AND_DATA_FLOW.md).
 
@@ -37,13 +37,39 @@
 - Максимальное количество сегментов настраивается через `MAX_SEGMENTS_PER_DOCUMENT` (по умолчанию 500, 0 = без ограничения). Документы обрабатываются пакетно, что позволяет анализировать крупные контракты без перегрузки.
 
 ### Адаптивные промпты и контекст
-Конфигурация LLM хранится в `config/model_registry.py`. Каждая модель имеет адаптивные лимиты:
-- `max_segment_chars` — максимальная длина сегмента, передаваемого в LLM (600 для 2B, 1200 для 12B+).
-- `max_rag_chars` — максимальный размер RAG-контекста (500 для 2B, 2000 для 12B+). Обрезка происходит по границам норм (никогда не режет норму посередине).
-- `max_rag_norms` — количество норм для извлечения из Qdrant (2 для 2B, 4 для 12B+).
-- `use_compact_prompt` — использовать компактный промпт (~1000 симв.) или полный (~2700 симв.).
+
+Конфигурация LLM хранится в `config/model_registry.py`. Каждая модель имеет адаптивные лимиты, которые **автоматически применяются в runtime** через `analyzer.py`:
+
+| Модель | context_window | max_segment | max_rag | max_norms | compact_prompt |
+|--------|----------------|-------------|---------|-----------|----------------|
+| `gemma2:2b` | 2048 | 400 | 800 | 2 | да |
+| `gemma3:4b` | 8192 | 800 | 1500 | 3 | нет |
+| `llama3.1:8b` | 128000 | 1000 | 2000 | 4 | нет |
+| `gemma3:12b` | 128000 | 1200 | 3000 | 5 | нет |
+
+**Поток применения конфигурации:**
+```
+LLM_MODEL (env) → get_model_config() → ModelConfig → analyzer.py:
+  - MAX_SEGMENT_CHARS = config.max_segment_chars
+  - MAX_RAG_CONTEXT_CHARS = config.max_rag_chars  
+  - MAX_RAG_NORMS = config.max_rag_norms
+  - payload.options.num_ctx = config.context_window
+  - payload.options.num_predict = config.max_output
+  - payload.options.temperature = config.temperature
+```
 
 Это гарантирует, что суммарный размер промпта (system + segment + RAG + output) не превышает context_window модели.
+
+### Настройка таймаутов
+
+Большие модели (8B+) требуют увеличенных таймаутов из-за длительного cold start:
+
+| Переменная | Описание | По умолчанию | Для 8B+ |
+|------------|----------|--------------|---------|
+| `LLM_REQUEST_TIMEOUT` | Таймаут HTTP-запроса к Ollama | 300с | 300-600с |
+| `LLM_HEARTBEAT_TIMEOUT` | Интервал heartbeat в Redis | 600с | 600-900с |
+
+При превышении heartbeat-таймаута анализ помечается как `failed`.
 
 ### Векторизация и Qdrant Threshold
 Модуль `RAGService` использует мультиязычный энкодер `intfloat/multilingual-e5-base` для перевода текста сегмента в 768-мерное пространство.

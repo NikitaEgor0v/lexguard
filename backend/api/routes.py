@@ -4,18 +4,95 @@ from starlette.concurrency import run_in_threadpool
 
 from config.database import get_db
 from config.security import get_current_user
-from models.db_models import UserDB
+from models.db_models import UserDB, AnalysisResultDB
 from services.analyzer import AnalyzerService, MAX_SEGMENTS_PER_DOCUMENT
 from services.preprocessor import PreprocessorService
 from services.risk_grouping import group_analysis_risks
 from models.schemas import AnalysisResponse, AnalysisStatus
 import uuid
 import logging
+import json
+import time
+import os
+import sys
+import requests
 
 router = APIRouter()
 analyzer = AnalyzerService()
 preprocessor = PreprocessorService()
 logger = logging.getLogger(__name__)
+
+
+def _verify_analysis_owner(
+    db: Session,
+    analysis_id: str,
+    current_user: UserDB,
+) -> AnalysisResultDB:
+    """Verify that current user owns the analysis. Raises HTTPException if not.
+    
+    Returns the analysis row if found and owned by user.
+    Raises 404 if analysis doesn't exist, 403 if owned by another user.
+    """
+    try:
+        uid = uuid.UUID(analysis_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Анализ не найден")
+    
+    row = db.query(AnalysisResultDB).filter_by(id=uid).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Анализ не найден")
+    
+    if row.user_id is not None and row.user_id != current_user.id:
+        logger.warning(
+            "IDOR attempt: user %s tried to access analysis %s owned by %s",
+            current_user.id, analysis_id, row.user_id
+        )
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+    
+    return row
+DEBUG_LOG_PATH = "/Users/nikitaegorov/Мои проекты/lexguard/.cursor/debug-3d0ca5.log"
+DEBUG_ENDPOINT = "http://127.0.0.1:7691/ingest/bcb6efda-9fe5-4ac7-b530-a243639a005e"
+DEBUG_ENDPOINT_DOCKER_FALLBACK = "http://host.docker.internal:7691/ingest/bcb6efda-9fe5-4ac7-b530-a243639a005e"
+
+
+def _debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    payload = {
+        "sessionId": "3d0ca5",
+        "runId": run_id,
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    # #region agent log
+    try:
+        requests.post(
+            DEBUG_ENDPOINT,
+            json=payload,
+            timeout=0.5,
+            headers={"Content-Type": "application/json", "X-Debug-Session-Id": "3d0ca5"},
+        )
+    except Exception:
+        try:
+            requests.post(
+                DEBUG_ENDPOINT_DOCKER_FALLBACK,
+                json=payload,
+                timeout=0.5,
+                headers={"Content-Type": "application/json", "X-Debug-Session-Id": "3d0ca5"},
+            )
+        except Exception:
+            pass
+    try:
+        os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception as e:
+        try:
+            print(f"[debug-log-failed][routes]{e}", file=sys.stderr)
+        except Exception:
+            pass
+    # #endregion
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
@@ -89,25 +166,39 @@ def get_analysis(
     db: Session = Depends(get_db),
     current_user: UserDB = Depends(get_current_user),
 ):
-    result = analyzer.get_result(analysis_id, db=db)
+    # P0 Security: Verify ownership before any other logic
+    row = _verify_analysis_owner(db, analysis_id, current_user)
+    
+    _debug_log(
+        "post-fix",
+        "H1_H2",
+        "backend/api/routes.py:get_analysis",
+        "analysis lookup (owner verified)",
+        {
+            "analysis_id": analysis_id,
+            "current_user_id": str(current_user.id) if current_user else None,
+            "result_status": row.status,
+        },
+    )
 
-    # If analysis is complete, return immediately
-    if result and result.status == "completed":
-        return result
+    # If analysis is complete, return full result via repository
+    if row.status == "completed":
+        result = analyzer.get_result(analysis_id, db=db)
+        if result:
+            return result
 
     # If already marked failed in DB, return consistent error response
-    if result and result.status == "failed":
+    if row.status == "failed":
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=200, content={
             "status": "failed",
             "analysis_id": analysis_id,
-            "filename": result.filename,
+            "filename": row.filename,
             "message": "Процесс анализа неожиданно прерван. Попробуйте загрузить документ снова."
         })
 
-    # Still processing or no DB record yet — check Redis for progress & heartbeat
+    # Still processing — check Redis for progress & heartbeat
     import redis
-    import os
     import time as _time
     from fastapi.responses import JSONResponse
     from services.analyzer import HEARTBEAT_TIMEOUT_SEC
@@ -133,25 +224,18 @@ def get_analysis(
             else:
                 # No heartbeat key at all — worker may not have started yet.
                 # Only consider dead if enough time passed since DB creation.
-                if result and result.status == "processing":
-                    from models.db_models import AnalysisResultDB
-                    import uuid as _uuid
-                    row = db.query(AnalysisResultDB).filter_by(id=_uuid.UUID(analysis_id)).first()
-                    if row and row.created_at:
-                        from datetime import datetime, timezone
-                        age_sec = (_time.time() - row.created_at.replace(tzinfo=timezone.utc).timestamp())
-                        if age_sec > HEARTBEAT_TIMEOUT_SEC:
-                            heartbeat_stale = True
+                if row.status == "processing" and row.created_at:
+                    from datetime import datetime, timezone
+                    age_sec = (_time.time() - row.created_at.replace(tzinfo=timezone.utc).timestamp())
+                    if age_sec > HEARTBEAT_TIMEOUT_SEC:
+                        heartbeat_stale = True
         except Exception as hb_err:
             logger.warning("Heartbeat check failed for %s: %s", analysis_id, hb_err)
 
     if heartbeat_stale:
         # Mark as failed in DB so future requests don't re-check
         try:
-            from models.db_models import AnalysisResultDB
-            import uuid as _uuid
-            row = db.query(AnalysisResultDB).filter_by(id=_uuid.UUID(analysis_id)).first()
-            if row and row.status == "processing":
+            if row.status == "processing":
                 row.status = "failed"
                 db.commit()
                 logger.warning("Analysis %s marked failed: heartbeat stale", analysis_id)
@@ -167,7 +251,7 @@ def get_analysis(
         return JSONResponse(status_code=200, content={
             "status": "failed",
             "analysis_id": analysis_id,
-            "filename": result.filename if result else None,
+            "filename": row.filename,
             "message": "Процесс анализа неожиданно прерван. Попробуйте загрузить документ снова."
         })
 
@@ -181,7 +265,7 @@ def get_analysis(
     return JSONResponse(status_code=200, content={
         "status": "processing",
         "analysis_id": analysis_id,
-        "filename": result.filename if result else None,
+        "filename": row.filename,
         "progress_percent": pct,
         "progress_label": label
     })
@@ -201,10 +285,25 @@ def get_analysis_grouped(
     """
     from repositories.analysis_repository import AnalysisRepository
 
-    result = analyzer.get_result(analysis_id, db=db)
+    # P0 Security: Verify ownership before any other logic
+    row = _verify_analysis_owner(db, analysis_id, current_user)
+    
+    _debug_log(
+        "post-fix",
+        "H2",
+        "backend/api/routes.py:get_analysis_grouped",
+        "grouped lookup (owner verified)",
+        {
+            "analysis_id": analysis_id,
+            "current_user_id": str(current_user.id) if current_user else None,
+            "result_status": row.status,
+        },
+    )
 
-    if result and result.status == "completed":
-        return group_analysis_risks(result)
+    if row.status == "completed":
+        result = analyzer.get_result(analysis_id, db=db)
+        if result:
+            return group_analysis_risks(result)
 
     # ── Partial results while still processing ──
     partial = AnalysisRepository.get_partial_result(db, analysis_id)

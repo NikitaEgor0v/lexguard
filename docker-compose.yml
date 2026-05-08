@@ -88,6 +88,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LLM_MODEL=${LLM_MODEL:-gemma2:2b}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - LLM_REQUEST_TIMEOUT=${LLM_REQUEST_TIMEOUT:-300}
+      - LLM_HEARTBEAT_TIMEOUT=${LLM_HEARTBEAT_TIMEOUT:-600}
+      - MIN_RELEVANCE_SCORE=${MIN_RELEVANCE_SCORE:-0.50}
       - DATABASE_URL=postgresql://lexguard:${POSTGRES_PASSWORD:-lexguard_dev}@lexguard_postgres:5432/lexguard
       - REDIS_URL=redis://lexguard_redis:6379/0
       - CELERY_BROKER_URL=redis://lexguard_redis:6379/0
@@ -113,7 +117,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LLM_MODEL=${LLM_MODEL:-gemma2:2b}
-      - LLM_MAX_WORKERS=${LLM_MAX_WORKERS:-3}
+      - LLM_MAX_WORKERS=${LLM_MAX_WORKERS:-2}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - LLM_REQUEST_TIMEOUT=${LLM_REQUEST_TIMEOUT:-300}
+      - LLM_HEARTBEAT_TIMEOUT=${LLM_HEARTBEAT_TIMEOUT:-600}
+      - MIN_RELEVANCE_SCORE=${MIN_RELEVANCE_SCORE:-0.50}
       - DATABASE_URL=postgresql://lexguard:${POSTGRES_PASSWORD:-lexguard_dev}@lexguard_postgres:5432/lexguard
       - REDIS_URL=redis://lexguard_redis:6379/0
       - CELERY_BROKER_URL=redis://lexguard_redis:6379/0

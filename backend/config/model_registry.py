@@ -4,6 +4,16 @@ import os
 from dataclasses import dataclass
 
 
+# RAG Retrieval Configuration
+# MIN_RELEVANCE_SCORE: Minimum cosine similarity threshold for RAG chunks.
+# Chunks with score below this threshold are discarded to reduce false positives.
+# Configurable via environment variable. Range: 0.0-1.0, recommended: 0.65-0.75
+# Lower values increase recall but may add irrelevant context.
+# Higher values increase precision but may miss relevant norms.
+MIN_RELEVANCE_SCORE_DEFAULT = 0.50  # Lowered slightly for better recall on server
+MAX_CHUNKS_PER_SEGMENT_DEFAULT = 3
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     context_window: int
@@ -23,19 +33,25 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
     "gemma2:2b": ModelConfig(
         context_window=2048, max_output=512, safe_context=1500,
         temperature=0.1,
-        max_segment_chars=600, max_rag_chars=500, max_rag_norms=2,
+        max_segment_chars=400, max_rag_chars=800, max_rag_norms=2,
         use_compact_prompt=True,
     ),
     "gemma3:4b": ModelConfig(
-        context_window=4096, max_output=1024, safe_context=3000,
+        context_window=8192, max_output=1024, safe_context=6000,
         temperature=0.1,
-        max_segment_chars=500, max_rag_chars=800, max_rag_norms=2,
-        use_compact_prompt=True,
+        max_segment_chars=800, max_rag_chars=1500, max_rag_norms=3,
+        use_compact_prompt=False,
+    ),
+    "llama3.1:8b": ModelConfig(
+        context_window=128000, max_output=2048, safe_context=100000,
+        temperature=0.1,
+        max_segment_chars=1000, max_rag_chars=2000, max_rag_norms=4,
+        use_compact_prompt=False,
     ),
     "gemma3:12b": ModelConfig(
         context_window=128000, max_output=2048, safe_context=100000,
         temperature=0.1,
-        max_segment_chars=1200, max_rag_chars=2000, max_rag_norms=4,
+        max_segment_chars=1200, max_rag_chars=3000, max_rag_norms=5,
         use_compact_prompt=False,
     ),
 }
@@ -44,7 +60,7 @@ MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
 DEFAULT_MODEL_CONFIG = ModelConfig(
     context_window=2048, max_output=512, safe_context=1500,
     temperature=0.1,
-    max_segment_chars=600, max_rag_chars=500, max_rag_norms=2,
+    max_segment_chars=400, max_rag_chars=800, max_rag_norms=2,
     use_compact_prompt=True,
 )
 

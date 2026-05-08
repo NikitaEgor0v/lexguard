@@ -266,14 +266,9 @@ class TestChunkBoundaryBreaking:
         assert "неустойку" in combined
         assert "не ограничен" in combined
 
-    def test_min_segment_length_drops_short_clauses(self):
-        """
-        BUG HUNT: Если пункт короче MIN_SEGMENT_LENGTH (80 символов),
-        при paragraph-based разбиении он ТЕРЯЕТСЯ.
-        Это опасно: короткий пункт «Ответственность не ограничена.» — 35 символов!
-        """
+    def test_min_segment_length_preserves_short_clauses(self):
+        """Paragraph segmentation keeps short but meaningful clauses."""
         preprocessor = PreprocessorService()
-        # Короткий но опасный пункт
         short_dangerous = "Ответственность Исполнителя не ограничена."
         assert len(short_dangerous) < preprocessor.MIN_SEGMENT_LENGTH
 
@@ -281,22 +276,14 @@ class TestChunkBoundaryBreaking:
 
         segments = preprocessor._segment_by_paragraphs(text)
         combined = " ".join(segments)
+        assert "не ограничена" in combined
 
-        # НАЙДЕН БАГ: короткий абзац отбрасывается и не попадает ни в один чанк!
-        # Это подтверждённая уязвимость — см. строку 147:
-        # if len(para) < 60 and not para.endswith("."): continue
-        # Наш текст ЗАКАНЧИВАЕТСЯ точкой, но filter стоит на 60 символов
-        # Однако MIN_SEGMENT_LENGTH = 80 — если буфер не накопится, пропускается
-
-    def test_clause_segmentation_preserves_short_but_meaningful(self):
-        """
-        При clause-based сегментации, пункты ≥40 символов сохраняются
-        (даже если < MIN_SEGMENT_LENGTH). Проверяем это.
-        """
+    def test_numbered_paragraphs_preserve_short_but_meaningful_text(self):
+        """Numbered paragraphs keep short but meaningful text."""
         preprocessor = PreprocessorService()
         text = (
-            "1. Исполнитель обязуется выполнить работы в полном объёме.\n"
-            "2. Ответственность Исполнителя не ограничена.\n"
+            "1. Исполнитель обязуется выполнить работы в полном объёме.\n\n"
+            "2. Ответственность Исполнителя не ограничена.\n\n"
             "3. Заказчик обязан принять результаты работ в течение 5 дней.\n"
         )
         segments = preprocessor._segment(text)
@@ -305,35 +292,23 @@ class TestChunkBoundaryBreaking:
 
 
 # ═══════════════════════════════════════════════════════════════
-# СЦЕНАРИЙ 1.4: Paragraph vs Clause — переключение стратегий
+# СЦЕНАРИЙ 1.4: Paragraph segmentation
 # ═══════════════════════════════════════════════════════════════
 
 class TestSegmentationStrategy:
-    """Тестируем корректность выбора стратегии сегментации."""
+    """Test the stable paragraph-based segmentation strategy."""
 
-    def test_clause_pattern_matches_standard_numbering(self):
-        """Regex распознаёт стандартную нумерацию пунктов: 1. 2. 3."""
+    def test_standard_numbering_is_preserved_as_text(self):
         preprocessor = PreprocessorService()
-        text = "1. Первый пункт договора. 2. Второй пункт. 3. Третий."
-        matches = list(preprocessor.CLAUSE_PATTERN.finditer(text))
-        assert len(matches) >= 2
+        text = "1. Первый пункт договора.\n\n2. Второй пункт.\n\n3. Третий."
 
-    def test_clause_pattern_matches_multilevel(self):
-        """Regex распознаёт нумерацию 1.1. 1.2. 2.1."""
-        preprocessor = PreprocessorService()
-        text = "1.1. Подпункт первый. 1.2. Подпункт второй."
-        matches = list(preprocessor.CLAUSE_PATTERN.finditer(text))
-        assert len(matches) >= 2
+        segments = preprocessor._segment(text)
+        combined = " ".join(segments)
+        assert "1. Первый пункт" in combined
+        assert "2. Второй пункт" in combined
+        assert "3. Третий" in combined
 
-    def test_clause_pattern_matches_cyrillic_bullets(self):
-        """Regex распознаёт кириллическую нумерацию: а) б) в)."""
-        preprocessor = PreprocessorService()
-        text = "а) первый подпункт текст б) второй подпункт текст"
-        matches = list(preprocessor.CLAUSE_PATTERN.finditer(text))
-        assert len(matches) >= 2
-
-    def test_falls_back_to_paragraph_if_no_clauses(self):
-        """Без нумерации — fallback на разбиение по абзацам."""
+    def test_segments_plain_paragraphs(self):
         preprocessor = PreprocessorService()
         text = "Первый длинный абзац содержит описание условий работы и обязательств сторон по всем пунктам.\n\nВторой длинный абзац тоже содержит множество условий и оговорок по данному контракту."
         segments = preprocessor._segment(text)

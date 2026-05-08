@@ -3,8 +3,6 @@ window.analysis = {
   currentResult: null,
   activeFilter: 'all',
   activeCategoryFilter: 'all',
-  highlightMode: false,
-  selectedSegmentId: null,
   // Track which segment IDs have already been rendered (for incremental streaming)
   _renderedSegmentIds: new Set(),
   categoryLabels: {
@@ -248,8 +246,6 @@ window.analysis = {
 
     this.renderExecutiveSummary(data);
     this.renderCategoryFilters(risks);
-    this.renderHighlightMap(risks);
-    this.updateHighlightModeUI();
 
     // Risk list
     const list = document.getElementById('riskList');
@@ -351,82 +347,6 @@ window.analysis = {
       const count = counts[key] || 0;
       return `<button class="filter-btn category-btn ${activeClass}" data-category="${key}" onclick="window.analysis.setCategoryFilter('${key}', this)">${label} · ${count}</button>`;
     }).join('');
-  },
-
-  updateHighlightModeUI() {
-    const wrap = document.getElementById('highlightWrap');
-    const btn = document.getElementById('highlightModeBtn');
-    if (!wrap || !btn) return;
-    wrap.style.display = this.highlightMode ? 'grid' : 'none';
-    btn.textContent = this.highlightMode ? 'Скрыть разметку' : 'Режим разметки';
-  },
-
-  toggleHighlightMode() {
-    this.highlightMode = !this.highlightMode;
-    this.updateHighlightModeUI();
-  },
-
-  renderHighlightMap(risks) {
-    const list = document.getElementById('highlightSourceList');
-    const detail = document.getElementById('highlightDetail');
-    if (!list || !detail) return;
-
-    list.innerHTML = '';
-    if (!Array.isArray(risks) || risks.length === 0) {
-      detail.textContent = 'Сегменты отсутствуют.';
-      return;
-    }
-
-    risks.forEach((risk) => {
-      const card = document.createElement('div');
-      card.className = `highlight-segment ${risk.risk_level}`;
-      card.dataset.segmentId = String(risk.segment_id);
-
-      const head = document.createElement('div');
-      head.className = 'highlight-segment-head';
-      const left = document.createElement('span');
-      left.textContent = `#${risk.segment_id}`;
-      const right = document.createElement('span');
-      right.textContent = risk.risk_level.toUpperCase();
-      head.appendChild(left);
-      head.appendChild(right);
-
-      const body = document.createElement('div');
-      const preview = risk.text.length > 190 ? `${risk.text.slice(0, 190)}…` : risk.text;
-      body.textContent = preview;
-
-      card.appendChild(head);
-      card.appendChild(body);
-      card.addEventListener('click', () => this.selectHighlightedSegment(risk.segment_id));
-      list.appendChild(card);
-    });
-
-    detail.textContent = 'Выберите сегмент слева, чтобы открыть объяснение риска и перейти к карточке.';
-  },
-
-  selectHighlightedSegment(segmentId) {
-    if (!this.currentResult) return;
-    this.selectedSegmentId = segmentId;
-
-    document.querySelectorAll('.highlight-segment').forEach((el) => {
-      el.classList.toggle('active', Number(el.dataset.segmentId) === segmentId);
-    });
-
-    const risks = this.currentResult.risks || [];
-    const selected = risks.find((item) => item.segment_id === segmentId);
-    const detail = document.getElementById('highlightDetail');
-    if (selected && detail) {
-      const category = selected.risk_category || 'без категории';
-      detail.innerHTML = [
-        `<p><strong>Сегмент:</strong> #${selected.segment_id}</p>`,
-        `<p><strong>Категория:</strong> ${this.escapeHtml(category)}</p>`,
-        `<p><strong>Уровень:</strong> ${this.escapeHtml(selected.risk_level)}</p>`,
-        `<p><strong>Описание:</strong> ${this.escapeHtml(selected.risk_description || 'Требует ручной проверки.')}</p>`,
-        `<p><strong>Рекомендация:</strong> ${this.escapeHtml(selected.recommendation || 'Нет авто-рекомендации.')}</p>`,
-      ].join('');
-    }
-
-    this.focusRiskCard(segmentId);
   },
 
   focusRiskCard(segmentId) {
@@ -532,7 +452,10 @@ window.analysis = {
     });
 
     document.querySelectorAll('.risk-card').forEach(card => {
-      const levelOk = levelFilter === 'all' || card.dataset.level === levelFilter;
+      const level = card.dataset.level;
+      const levelOk = levelFilter === 'all' 
+        || (levelFilter === 'risky' && ['high', 'medium', 'low'].includes(level))
+        || level === levelFilter;
       const categoryOk = categoryFilter === 'all' || card.dataset.category === categoryFilter;
       card.classList.toggle('hidden', !(levelOk && categoryOk));
     });

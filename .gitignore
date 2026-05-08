@@ -41,6 +41,7 @@ huggingface_cache/
 # ── IDE ──
 .idea/
 .vscode/
+.cursor
 *.swp
 *.swo
 .DS_Store
@@ -59,12 +60,14 @@ legal-dataset/
 benchmark.py
 results_*.csv
 benchmark_summary.csv
+_test_*.py
 
 # ── Временные файлы ──
 *.tmp
 *.bak
 tmp/
 temp/
+agreement/
 
 # ── Jupyter (если используешь) ──
 .ipynb_checkpoints/
