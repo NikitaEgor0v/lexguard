@@ -17,6 +17,6 @@ COPY . .
 
 RUN touch api/__init__.py models/__init__.py services/__init__.py config/__init__.py repositories/__init__.py
 
-RUN chmod +x start.sh
+RUN chmod +x start.sh && sed -i 's/\r$//' start.sh
 
 CMD ["./start.sh"]

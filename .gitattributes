@@ -1,0 +1,4 @@
+# Force LF for shell scripts to avoid issues with Docker on Windows
+*.sh text eol=lf
+Dockerfile* text eol=lf
+.env* text eol=lf
