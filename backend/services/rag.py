@@ -137,7 +137,7 @@ class RAGService:
             )
         else:
             logger.info("Коллекция норм синхронизирована по количеству: %d", count)
-        texts = [f"passage: {n['safe_norm']}" for n in norms]
+        texts = [f"passage: {n['safe_norm']} {n.get('risky_pattern', '')}" for n in norms]
         vectors = self._encoder.encode(texts, batch_size=32, show_progress_bar=False)
         points = [
             PointStruct(

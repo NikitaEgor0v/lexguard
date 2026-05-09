@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 import re
+from difflib import SequenceMatcher
 from config.model_registry import get_model_config
 from models.schemas import (
     AnalysisResponse, AnalysisSummary, RiskItem, RiskLevel, RiskCategory
@@ -28,12 +29,21 @@ NEUTRAL_SEGMENT_PATTERNS = [
     r"^[\s\S]*(экземпляр|подпис|печат|договор\s*составлен|от\s*заказчика|от\s*исполнителя)[\s\S]*$",
     # Only validity date
     r"^[\s\S]*(вступает\s*в\s*силу|действует\s*(до|с)|срок\s*действия)[\s\S]*$",
+    # User added patterns
+    r"\d+\s*календарных\s*дней",
+    r"составляет\s+[\d\s]+(рубл|руб)",
+    r"по одному для каждой из сторон",
+    r"равную юридическую силу",
 ]
 
 def is_neutral_segment(text: str) -> bool:
     """Check if segment is neutral (only contains price, requisites, signatures etc.)."""
     text_lower = text.lower().strip()
     
+    for pattern in NEUTRAL_SEGMENT_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+            
     # Quick check for neutral keywords without risk keywords
     neutral_keywords = [
         "инн", "кпп", "огрн", "бик", "р/с", "к/с", "банк",
@@ -54,7 +64,7 @@ def is_neutral_segment(text: str) -> bool:
         return True
     
     # Check if segment is ONLY a price
-    price_pattern = r"^[^а-яА-Яa-zA-Z]*(стоимость|цена|сумма|оплата)[^а-яА-Яa-zA-Z]*[\d\s]+\s*(рубл|руб|₽|тыс|р\.)"
+    price_pattern = r"(стоимость|цена|сумма|оплата).{0,30}[\d\s]+(рубл|руб|₽|тыс|р\.)"
     if re.search(price_pattern, text_lower) and len(text) < 200:
         # Check it doesn't have substantive clauses
         substantive_markers = ["если", "при", "в случае", "обязан", "вправе", "должен"]
@@ -77,7 +87,7 @@ MAX_RAG_NORMS = MODEL_CONFIG.max_rag_norms
 REQUEST_TIMEOUT_SEC = int(os.getenv("LLM_REQUEST_TIMEOUT", "300"))
 HEARTBEAT_TIMEOUT_SEC = int(os.getenv("LLM_HEARTBEAT_TIMEOUT", "600"))
 MAX_LLM_RETRIES = 2
-MAX_CLASSIFY_PREVIEW_CHARS = 800
+MAX_CLASSIFY_PREVIEW_CHARS = 1500
 
 # Batch size for incremental saving (segments are saved to DB in batches)
 ANALYSIS_BATCH_SIZE = int(os.getenv("ANALYSIS_BATCH_SIZE", "20"))
@@ -414,10 +424,13 @@ class AnalyzerService:
     def _classify_contract_type(self, segments: list[str]) -> str:
         if not segments:
             return "иной"
-        if len(segments) >= 2:
-            preview = f"{segments[0]}\n\n{segments[1]}"[:MAX_CLASSIFY_PREVIEW_CHARS]
+        
+        full_text = "\n\n".join(segments)
+        if len(full_text) > 4500:
+            preview = full_text[:1000] + "\n...\n" + full_text[3000:4500]
         else:
-            preview = segments[0][:MAX_CLASSIFY_PREVIEW_CHARS]
+            preview = full_text[:MAX_CLASSIFY_PREVIEW_CHARS]
+            
         if not preview.strip():
             return "иной"
         payload = {
@@ -464,7 +477,7 @@ class AnalyzerService:
             safe_redaction = data.get("safe_redaction")
             
             # Validate safe_redaction: only for high risk, must not contain original text
-            if safe_redaction and is_risky and risk_level == RiskLevel.HIGH:
+            if safe_redaction and is_risky and risk_level in (RiskLevel.HIGH, RiskLevel.MEDIUM):
                 safe_redaction = self._validate_safe_redaction(safe_redaction, segment)
             else:
                 safe_redaction = None
@@ -501,23 +514,28 @@ class AnalyzerService:
         original_lower = original_segment.lower()
         safe_lower = safe_redaction.lower()
         
-        # Extract dangerous phrases from original (first 50 chars, key phrases)
-        dangerous_phrases = []
-        for phrase_len in [30, 20, 15]:
-            if len(original_segment) >= phrase_len:
-                dangerous_phrases.append(original_lower[:phrase_len])
+        DANGEROUS_PHRASES = [
+            "штраф",
+            "неустойк",
+            "односторонн",
+            "без компенсац",
+            "без объяснен",
+            "без причин",
+            "любой момент",
+            "немедленн",
+            "по усмотрению"
+        ]
         
-        # Check if safe_redaction starts with dangerous phrase from original
-        for phrase in dangerous_phrases:
+        # Check if safe_redaction starts with dangerous phrase
+        for phrase in DANGEROUS_PHRASES:
             if safe_lower.startswith(phrase):
-                logger.warning(f"safe_redaction starts with original text, rejecting")
+                logger.warning(f"safe_redaction starts with dangerous phrase: {phrase}, rejecting")
                 return None
         
-        # Check for high overlap with original text (>60% similar = likely contaminated)
-        common_words = set(safe_lower.split()) & set(original_lower.split())
-        original_words = set(original_lower.split())
-        if original_words and len(common_words) / len(original_words) > 0.6:
-            logger.warning(f"safe_redaction has >60% overlap with original, rejecting")
+        # Check for high overlap with SequenceMatcher instead of sets
+        similarity = SequenceMatcher(None, safe_lower, original_lower).ratio()
+        if similarity > 0.85:
+            logger.warning(f"safe_redaction has >85% similarity with original (score: {similarity:.2f}), rejecting")
             return None
         
         return safe_redaction
