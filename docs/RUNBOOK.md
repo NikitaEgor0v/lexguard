@@ -81,7 +81,7 @@ docker compose ps
 Ожидаемый вывод:
 ```
 NAME                  STATUS
-lexguard-backend      Up (healthy)
+lexguard-backend      Up
 lexguard-frontend     Up
 lexguard-ollama       Up (healthy)
 lexguard-ollama-init  Exited (0)
@@ -130,7 +130,7 @@ docker exec lexguard-ollama ollama run llama3.1:8b "Привет, как дел�
 ```bash
 # Health check бэкенда
 curl http://localhost:8000/health
-# Ожидаемый ответ: {"status": "ok"}
+# Ожидаемый ответ: {"status": "healthy"}
 
 # Статус системы с моделью
 curl http://localhost:8000/api/v1/status
@@ -158,6 +158,9 @@ curl http://localhost:8000/api/v1/status
 ```
 
 ### Шаг 7: Накатить миграции БД (1 мин)
+
+`backend` уже применяет миграции автоматически при старте контейнера (`alembic upgrade head` в `start.sh`).
+Этот шаг нужен для ручной проверки или повторного применения миграций.
 
 ```bash
 docker exec lexguard-backend alembic upgrade head
@@ -240,7 +243,7 @@ curl http://localhost:8000/api/v1/analyze/YOUR_ANALYSIS_ID
 
 - [ ] Docker и Docker Compose установлены
 - [ ] Файл `.env` создан с `LLM_MODEL=llama3.1:8b`
-- [ ] Все контейнеры запущены и healthy
+- [ ] Все контейнеры запущены (`backend` и `celery` могут быть просто `Up` без healthcheck)
 - [ ] Модель загружена (`model_available: true`)
 - [ ] Модель инициализирована (первый запрос выполнен)
 - [ ] Миграции БД накатаны
