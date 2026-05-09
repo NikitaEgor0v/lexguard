@@ -17,6 +17,7 @@ COPY . .
 
 RUN touch api/__init__.py models/__init__.py services/__init__.py config/__init__.py repositories/__init__.py
 
-RUN chmod +x start.sh && sed -i 's/\r$//' start.sh
+RUN chmod +x start.sh
 
-CMD ["./start.sh"]
+# Скрипт конвертируется в Unix-формат при запуске для обхода CRLF в Windows volume mounts
+CMD ["/bin/bash", "-c", "tr -d '\\r' < start.sh > start_unix.sh && chmod +x start_unix.sh && ./start_unix.sh"]
