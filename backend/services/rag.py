@@ -26,6 +26,8 @@ MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", str(MIN_RELEVANCE_S
 MAX_CHUNKS_PER_SEGMENT = int(os.getenv("MAX_CHUNKS_PER_SEGMENT", str(MAX_CHUNKS_PER_SEGMENT_DEFAULT)))
 
 UNIVERSAL_CONTRACT_TYPES = ("все", "all", "any", "любой", "иной")
+MIN_USER_DOC_SCORE = 0.85
+CORPORATE_NORM_SCORE = 0.90
 CONTRACT_TYPE_ALIASES = {
     "услуги": ("услуги", "software_development", "outsourcing"),
     "подряд": ("подряд", "software_development"),
@@ -75,7 +77,7 @@ class UserRAGChunk:
     
     def format_for_prompt(self) -> str:
         """Format user chunk for LLM prompt."""
-        if self.score >= 0.82:
+        if self.score >= CORPORATE_NORM_SCORE:
             header = (
                 "[КОРПОРАТИВНАЯ НОРМА — ПРИНЯТЫЙ СТАНДАРТ КОМПАНИИ]\n"
                 "ВАЖНО: данная формулировка принята как стандарт компании. "
@@ -371,7 +373,7 @@ class RAGService:
 
             user_chunks: list[UserRAGChunk] = []
             for hit in results:
-                if hit.score < MIN_RELEVANCE_SCORE:
+                if hit.score < MIN_USER_DOC_SCORE:
                     continue
                 p = hit.payload
                 user_chunks.append(UserRAGChunk(
@@ -413,7 +415,7 @@ class RAGService:
 
         parts: list[str] = []
 
-        corporate_norms = [uc for uc in result.user_chunks if uc.score >= 0.82]
+        corporate_norms = [uc for uc in result.user_chunks if uc.score >= CORPORATE_NORM_SCORE]
         regular_user = [uc for uc in result.user_chunks if uc.score < 0.82]
 
         for chunk in corporate_norms:

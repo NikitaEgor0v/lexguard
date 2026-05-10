@@ -42,6 +42,7 @@ huggingface_cache/
 .idea/
 .vscode/
 .cursor
+.claude/
 *.swp
 *.swo
 .DS_Store
