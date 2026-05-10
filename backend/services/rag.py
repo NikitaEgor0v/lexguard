@@ -223,7 +223,7 @@ class RAGService:
             )
 
             for hit in results:
-                logger.debug(
+                logger.info(
                     "RAG candidate score=%.3f topic='%s' segment='%s...'",
                     hit.score,
                     hit.payload.get("topic", "?"),

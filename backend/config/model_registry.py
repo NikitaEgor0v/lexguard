@@ -10,7 +10,7 @@ from dataclasses import dataclass
 # Configurable via environment variable. Range: 0.0-1.0, recommended: 0.65-0.75
 # Lower values increase recall but may add irrelevant context.
 # Higher values increase precision but may miss relevant norms.
-MIN_RELEVANCE_SCORE_DEFAULT = 0.72  # Lowered slightly for better recall on server
+MIN_RELEVANCE_SCORE_DEFAULT = 0.80  # Повышен с 0.72 для отсечения заголовков 1.1, 1.2
 MAX_CHUNKS_PER_SEGMENT_DEFAULT = 3
 
 
