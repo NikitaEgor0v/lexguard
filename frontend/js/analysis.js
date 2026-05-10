@@ -420,6 +420,12 @@ window.analysis = {
               </button>
             </div>
           </div>` : ''}
+          ${risk.is_risky ? `
+          <div class="risk-detail-row">
+            <button class="btn-accept-norm" onclick="event.stopPropagation(); window.analysis.openAcceptNormModal(${JSON.stringify(risk.text).replace(/</g, '\\u003c')}, ${JSON.stringify(risk.risk_description || '').replace(/</g, '\\u003c')})" title="Принять эту формулировку как корпоративную норму">
+              Принять как норму компании
+            </button>
+          </div>` : ''}
         </div>
       </div>
     `;
@@ -502,6 +508,109 @@ window.analysis = {
         btn.classList.remove('copied');
       }, 2000);
     });
+  },
+
+  openAcceptNormModal(segmentText, riskDescription) {
+    let modal = document.getElementById('acceptNormModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'acceptNormModal';
+      modal.className = 'modal-backdrop';
+      modal.innerHTML = `
+        <div class="auth-modal" style="max-width:520px;">
+          <div class="auth-header">
+            <div class="auth-title">Принять как норму компании</div>
+            <div class="auth-subtitle">Этот сегмент будет сохранён как корпоративный эталон и при следующем анализе не будет считаться риском.</div>
+          </div>
+          <div class="auth-form-group">
+            <label class="auth-label">Текст сегмента</label>
+            <textarea id="normSegmentText" class="auth-input" rows="4" style="resize:vertical; font-size:12px;"></textarea>
+          </div>
+          <div class="auth-form-group">
+            <label class="auth-label">Название правила</label>
+            <input type="text" id="normTitle" class="auth-input" placeholder="Например: Стандартное расторжение">
+          </div>
+          <div class="auth-form-group">
+            <label class="auth-label">Тип договора</label>
+            <select id="normContractType" class="auth-input">
+              <option value="любой">Любой (универсальный)</option>
+              <option value="услуги">Услуги</option>
+              <option value="подряд">Подряд</option>
+              <option value="поставка">Поставка</option>
+              <option value="аренда">Аренда</option>
+              <option value="нда">NDA</option>
+              <option value="лицензионный">Лицензионный</option>
+              <option value="трудовой">Трудовой</option>
+            </select>
+          </div>
+          <div class="auth-error" id="normError" style="display:none;"></div>
+          <div style="display:flex; gap:8px; margin-top:16px;">
+            <button class="btn-primary" id="normSubmitBtn" onclick="window.analysis.submitAcceptNorm()">Сохранить</button>
+            <button class="btn-outline" onclick="document.getElementById('acceptNormModal').style.display='none'">Отмена</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    document.getElementById('normSegmentText').value = segmentText;
+    document.getElementById('normTitle').value = '';
+    document.getElementById('normError').style.display = 'none';
+
+    const contractType = this._detectCurrentContractType();
+    const select = document.getElementById('normContractType');
+    select.value = contractType || 'любой';
+
+    modal.style.display = 'flex';
+  },
+
+  _detectCurrentContractType() {
+    const filename = this.currentResult?.filename || '';
+    return '';
+  },
+
+  async submitAcceptNorm() {
+    const text = document.getElementById('normSegmentText').value.trim();
+    const title = document.getElementById('normTitle').value.trim();
+    const contractType = document.getElementById('normContractType').value;
+    const errEl = document.getElementById('normError');
+    const btn = document.getElementById('normSubmitBtn');
+
+    if (!text) {
+      errEl.textContent = 'Текст сегмента не может быть пустым';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (!title) {
+      errEl.textContent = 'Укажите название правила';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Сохранение...';
+    errEl.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('text', text);
+    formData.append('title', title);
+    formData.append('contract_type', contractType);
+    formData.append('description', 'Корпоративная норма (принятый риск)');
+
+    try {
+      await window.api.fetch('/documents/upload/text', {
+        method: 'POST',
+        body: formData
+      });
+      document.getElementById('acceptNormModal').style.display = 'none';
+      if (window.documentsAPI) window.documentsAPI.loadList();
+    } catch (e) {
+      errEl.textContent = 'Ошибка: ' + e.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Сохранить';
+    }
   },
 
   exportJSON() {

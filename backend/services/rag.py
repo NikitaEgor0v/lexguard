@@ -25,7 +25,7 @@ TOP_K = 6  # Retrieve more candidates for filtering (will be limited by model co
 MIN_RELEVANCE_SCORE = float(os.getenv("MIN_RELEVANCE_SCORE", str(MIN_RELEVANCE_SCORE_DEFAULT)))
 MAX_CHUNKS_PER_SEGMENT = int(os.getenv("MAX_CHUNKS_PER_SEGMENT", str(MAX_CHUNKS_PER_SEGMENT_DEFAULT)))
 
-UNIVERSAL_CONTRACT_TYPES = ("все", "all", "any")
+UNIVERSAL_CONTRACT_TYPES = ("все", "all", "any", "любой", "иной")
 CONTRACT_TYPE_ALIASES = {
     "услуги": ("услуги", "software_development", "outsourcing"),
     "подряд": ("подряд", "software_development"),
@@ -75,8 +75,16 @@ class UserRAGChunk:
     
     def format_for_prompt(self) -> str:
         """Format user chunk for LLM prompt."""
+        if self.score >= 0.82:
+            header = (
+                "[КОРПОРАТИВНАЯ НОРМА — ПРИНЯТЫЙ СТАНДАРТ КОМПАНИИ]\n"
+                "ВАЖНО: данная формулировка принята как стандарт компании. "
+                "Если текст сегмента соответствует этому эталону — is_risky: false, risk_level: none.\n"
+            )
+        else:
+            header = "[ПОЛЬЗОВАТЕЛЬСКИЙ ЭТАЛОН]\n"
         return (
-            f"[ПОЛЬЗОВАТЕЛЬСКИЙ ЭТАЛОН]\n"
+            f"{header}"
             f"Файл: {self.filename}\n"
             f"Тип договора: {self.contract_type}\n"
             f"Текст: {self.text}"
@@ -163,7 +171,7 @@ class RAGService:
 
     def _resolve_filter_contract_types(self, contract_type: str) -> list[str]:
         normalized = self._normalize_contract_type(contract_type)
-        if not normalized or normalized == "иной":
+        if not normalized or normalized in UNIVERSAL_CONTRACT_TYPES:
             return []
 
         resolved = set(CONTRACT_TYPE_ALIASES.get(normalized, (normalized,)))
@@ -347,10 +355,11 @@ class RAGService:
             must_conditions = [
                 FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))
             ]
-            if contract_type and contract_type != "иной":
-                # Always include 'иной' (Any/Universal) in addition to the specific contract_type
+            normalized_ct = self._normalize_contract_type(contract_type)
+            if normalized_ct and normalized_ct not in UNIVERSAL_CONTRACT_TYPES:
+                allowed = sorted({normalized_ct, "иной", "любой"})
                 must_conditions.append(
-                    FieldCondition(key="contract_type", match=MatchAny(any=[contract_type, "иной"]))
+                    FieldCondition(key="contract_type", match=MatchAny(any=allowed))
                 )
 
             results = self._client.search(
@@ -398,18 +407,22 @@ class RAGService:
         """
         if result.no_rag_context:
             return None
-        
+
         if not result.chunks and not result.user_chunks:
             return None
-        
+
         parts: list[str] = []
-        
-        # Add system chunks first (higher authority)
+
+        corporate_norms = [uc for uc in result.user_chunks if uc.score >= 0.82]
+        regular_user = [uc for uc in result.user_chunks if uc.score < 0.82]
+
+        for chunk in corporate_norms:
+            parts.append(chunk.format_for_prompt())
+
         for chunk in result.chunks:
             parts.append(chunk.format_for_prompt())
-        
-        # Add user chunks (personal context)
-        for user_chunk in result.user_chunks:
+
+        for user_chunk in regular_user:
             parts.append(user_chunk.format_for_prompt())
         
         if not parts:
