@@ -173,6 +173,7 @@ class DocumentService:
             filename=title,
             contract_type=contract_type,
             description=description or None,
+            source_text=text.strip(),
             chunks_count=len(chunks),
         )
         db.add(doc)

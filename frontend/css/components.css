@@ -865,3 +865,13 @@
   background: rgba(79, 142, 247, 0.15);
   color: var(--accent);
 }
+.doc-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0;
+  line-height: 1.4;
+  padding: 6px 8px;
+  background: var(--bg-secondary, rgba(0,0,0,0.03));
+  border-radius: 6px;
+  word-break: break-word;
+}

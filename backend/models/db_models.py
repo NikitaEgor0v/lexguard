@@ -184,6 +184,7 @@ class UserDocumentDB(Base):
     filename = Column(String(512), nullable=False)
     contract_type = Column(String(64), nullable=False, default="иной")
     description = Column(Text, nullable=True)
+    source_text = Column(Text, nullable=True)
     chunks_count = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 

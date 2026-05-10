@@ -24,5 +24,6 @@ class UserDocumentResponse(BaseModel):
     filename: str
     contract_type: str
     description: str | None
+    source_text: str | None = None
     chunks_count: int
     created_at: datetime
