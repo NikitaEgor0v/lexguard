@@ -836,3 +836,32 @@
 
 .chat-send-btn:hover:not(:disabled) { background: #3d7af0; }
 .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Accept as company norm button */
+.btn-accept-norm {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+.btn-accept-norm:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Corporate norm styling in doc list */
+.doc-item--corporate {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+.doc-tag--corporate {
+  background: rgba(79, 142, 247, 0.15);
+  color: var(--accent);
+}

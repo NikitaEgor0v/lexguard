@@ -40,26 +40,53 @@ window.documentsAPI = {
   async loadList() {
     const listEl = this.elements.list();
     if (!listEl) return;
-    
+
     try {
       const docs = await window.api.fetch('/documents');
       if (docs.length === 0) {
         listEl.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center;">Нет загруженных эталонов</div>';
         return;
       }
-      
-      listEl.innerHTML = docs.map(doc => `
-        <div class="doc-item">
-          <div class="doc-info">
-            <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
-            <div class="doc-meta">
-              <span class="doc-tag">${doc.contract_type}</span>
-              ${doc.description ? `<span>${doc.description}</span>` : ''}
+
+      const corporateNorms = docs.filter(d => d.description && d.description.includes('Корпоративная норма'));
+      const standardEtalons = docs.filter(d => !d.description || !d.description.includes('Корпоративная норма'));
+
+      let html = '';
+
+      if (corporateNorms.length > 0) {
+        html += '<div class="doc-section-label" style="font-size:11px; color:var(--accent); font-weight:600; margin:8px 0 4px; text-transform:uppercase; letter-spacing:0.5px;">Корпоративные нормы</div>';
+        html += corporateNorms.map(doc => `
+          <div class="doc-item doc-item--corporate">
+            <div class="doc-info">
+              <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
+              <div class="doc-meta">
+                <span class="doc-tag doc-tag--corporate">${doc.contract_type === 'любой' ? 'любой' : doc.contract_type}</span>
+              </div>
             </div>
+            <button class="btn-icon" onclick="documentsAPI.deleteDoc('${doc.id}')" title="Удалить">✕</button>
           </div>
-          <button class="btn-icon" onclick="documentsAPI.deleteDoc('${doc.id}')" title="Удалить">✕</button>
-        </div>
-      `).join('');
+        `).join('');
+      }
+
+      if (standardEtalons.length > 0) {
+        if (corporateNorms.length > 0) {
+          html += '<div class="doc-section-label" style="font-size:11px; color:var(--text-muted); font-weight:600; margin:12px 0 4px; text-transform:uppercase; letter-spacing:0.5px;">Пользовательские эталоны</div>';
+        }
+        html += standardEtalons.map(doc => `
+          <div class="doc-item">
+            <div class="doc-info">
+              <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
+              <div class="doc-meta">
+                <span class="doc-tag">${doc.contract_type}</span>
+                ${doc.description ? `<span>${doc.description}</span>` : ''}
+              </div>
+            </div>
+            <button class="btn-icon" onclick="documentsAPI.deleteDoc('${doc.id}')" title="Удалить">✕</button>
+          </div>
+        `).join('');
+      }
+
+      listEl.innerHTML = html;
     } catch (e) {
       console.error('Failed to load user documents', e);
       listEl.innerHTML = '<div style="font-size:12px; color:var(--high);">Ошибка загрузки</div>';
@@ -122,7 +149,7 @@ window.documentsAPI = {
         this.elements.titleInput().value = '';
         this.elements.textInput().value = '';
       }
-      this.elements.typeSelect().value = 'иной';
+      this.elements.typeSelect().value = 'любой';
       this.elements.descInput().value = '';
       this.validateForm();
       
