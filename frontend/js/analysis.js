@@ -182,6 +182,7 @@ window.analysis = {
         this._renderedSegmentIds.add(risk.segment_id);
         const card = this.createRiskCard(risk, this._renderedSegmentIds.size - 1);
         list.appendChild(card);
+        this._attachAcceptNormHandlers([risk], card);
     });
 
     // Rebuild category filters based on what we have so far
@@ -253,6 +254,7 @@ window.analysis = {
     risks.forEach((risk, idx) => {
       list.appendChild(this.createRiskCard(risk, idx));
     });
+    this._attachAcceptNormHandlers(risks);
 
     this.applyFilters();
     const analysisId = data.analysis_id;
@@ -422,7 +424,7 @@ window.analysis = {
           </div>` : ''}
           ${risk.is_risky ? `
           <div class="risk-detail-row">
-            <button class="btn-accept-norm" onclick="event.stopPropagation(); window.analysis.openAcceptNormModal(${JSON.stringify(risk.text).replace(/</g, '\\u003c')}, ${JSON.stringify(risk.risk_description || '').replace(/</g, '\\u003c')})" title="Принять эту формулировку как корпоративную норму">
+            <button class="btn-accept-norm" data-accept-norm data-segment-id="${risk.segment_id}" title="Принять эту формулировку как корпоративную норму">
               Принять как норму компании
             </button>
           </div>` : ''}
@@ -507,6 +509,24 @@ window.analysis = {
         btn.innerHTML = originalText;
         btn.classList.remove('copied');
       }, 2000);
+    });
+  },
+
+  _attachAcceptNormHandlers(risks, scope) {
+    const root = scope || document.getElementById('riskList');
+    if (!root) return;
+    const buttons = root.querySelectorAll('button[data-accept-norm]');
+    const byId = new Map(risks.map(r => [String(r.segment_id), r]));
+    buttons.forEach(btn => {
+      if (btn._normHandlerAttached) return;
+      const id = btn.getAttribute('data-segment-id');
+      const risk = byId.get(id);
+      if (!risk) return;
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.openAcceptNormModal(risk.text, risk.risk_description || '');
+      });
+      btn._normHandlerAttached = true;
     });
   },
 
