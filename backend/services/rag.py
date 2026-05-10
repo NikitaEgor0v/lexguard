@@ -342,14 +342,15 @@ class RAGService:
         P1: Integrated into main RAG pipeline for unified context.
         """
         try:
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny
 
             must_conditions = [
                 FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))
             ]
             if contract_type and contract_type != "иной":
+                # Always include 'иной' (Any/Universal) in addition to the specific contract_type
                 must_conditions.append(
-                    FieldCondition(key="contract_type", match=MatchValue(value=contract_type))
+                    FieldCondition(key="contract_type", match=MatchAny(any=[contract_type, "иной"]))
                 )
 
             results = self._client.search(
