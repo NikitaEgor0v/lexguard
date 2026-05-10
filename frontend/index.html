@@ -149,12 +149,25 @@
         </div>
 
         <div class="doc-upload-form">
-          <div class="doc-file-zone" onclick="document.getElementById('docFileInput').click()">
-            <input type="file" id="docFileInput" accept=".pdf,.docx" style="display:none"
-              onchange="window.documentsAPI.handleFileSelect()">
-            <span id="docFileSelected">Выберите файл эталона</span>
+          <div class="auth-tabs" style="margin-bottom: 12px; margin-top: 0;">
+            <div class="auth-tab active" id="docFileTab" onclick="window.documentsAPI.switchMode('file')" style="font-size: 13px; padding: 6px;">Файл</div>
+            <div class="auth-tab" id="docTextTab" onclick="window.documentsAPI.switchMode('text')" style="font-size: 13px; padding: 6px;">Текст</div>
           </div>
-          <div class="doc-input-group">
+
+          <div id="docFileMode">
+            <div class="doc-file-zone" onclick="document.getElementById('docFileInput').click()">
+              <input type="file" id="docFileInput" accept=".pdf,.docx" style="display:none"
+                onchange="window.documentsAPI.handleFileSelect()">
+              <span id="docFileSelected">Выберите файл эталона</span>
+            </div>
+          </div>
+          
+          <div id="docTextMode" style="display:none;">
+            <input type="text" class="doc-input" id="docTitleInput" placeholder="Название эталона (обязательно)" style="margin-bottom: 8px;">
+            <textarea class="doc-input" id="docTextInput" placeholder="Вставьте текст эталонного пункта..." rows="4" style="resize:vertical;"></textarea>
+          </div>
+
+          <div class="doc-input-group" style="margin-top: 8px;">
             <select class="doc-select" id="docTypeSelect">
               <option value="иной">Тип договора (любой)</option>
               <option value="услуги">Услуги</option>

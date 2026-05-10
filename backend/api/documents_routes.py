@@ -78,3 +78,26 @@ def delete_document(
         service.delete_document(db, current_user.id, document_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+@router.post("/upload/text", response_model=UserDocumentResponse, status_code=status.HTTP_201_CREATED)
+def upload_text_document(
+    text: str = Form(...),
+    title: str = Form("Текстовый эталон"),
+    contract_type: str = Form("иной"),
+    description: str = Form(""),
+    db: DBSession = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+) -> UserDocumentResponse:
+    """Upload a reference document as plain text."""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Текст не может быть пустым")
+        
+    try:
+        return service.upload_text(
+            db, current_user.id, text, title, contract_type, description,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

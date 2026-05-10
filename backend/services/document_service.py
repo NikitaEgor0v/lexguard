@@ -120,6 +120,68 @@ class DocumentService:
         logger.info("User document uploaded: %s (%d chunks) by user %s", filename, len(chunks), user_id)
         return UserDocumentResponse.model_validate(doc)
 
+
+    def upload_text(
+        self,
+        db: Session,
+        user_id: UUID,
+        text: str,
+        title: str,
+        contract_type: str = "иной",
+        description: str = "",
+    ) -> UserDocumentResponse:
+        """Process, vectorize and store a user reference text."""
+        if not self._ready:
+            raise RuntimeError("Сервис документов недоступен")
+
+        text = self._preprocessor._clean_text(text)
+        if not text.strip():
+            raise ValueError("Текст пуст")
+
+        # Chunk text
+        chunks = self._chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
+        if not chunks:
+            raise ValueError("Не удалось извлечь фрагменты из текста")
+
+        doc_id = uuid4()
+
+        # Vectorize and upsert into Qdrant
+        from qdrant_client.models import PointStruct
+
+        texts_for_encoding = [f"passage: {chunk}" for chunk in chunks]
+        vectors = self._encoder.encode(texts_for_encoding, batch_size=32, show_progress_bar=False)
+
+        points = [
+            PointStruct(
+                id=str(uuid4()),
+                vector=vec.tolist(),
+                payload={
+                    "user_id": str(user_id),
+                    "document_id": str(doc_id),
+                    "contract_type": contract_type,
+                    "chunk_text": chunk,
+                    "filename": title,
+                },
+            )
+            for chunk, vec in zip(chunks, vectors)
+        ]
+        self._qdrant.upsert(collection_name=USER_DOCS_COLLECTION, points=points)
+
+        doc = UserDocumentDB(
+            id=doc_id,
+            user_id=user_id,
+            filename=title,
+            contract_type=contract_type,
+            description=description or None,
+            chunks_count=len(chunks),
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        logger.info("User text reference uploaded: %s (%d chunks) by user %s", title, len(chunks), user_id)
+        return UserDocumentResponse.model_validate(doc)
+
     def list_documents(self, db: Session, user_id: UUID) -> list[UserDocumentResponse]:
         """List all documents for a user."""
         rows = (
