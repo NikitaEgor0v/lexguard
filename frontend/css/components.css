@@ -895,3 +895,21 @@
   border-radius: 6px;
   word-break: break-word;
 }
+.doc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.doc-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.doc-badge--analysis {
+  background: rgba(79, 142, 247, 0.15);
+  color: var(--accent);
+}

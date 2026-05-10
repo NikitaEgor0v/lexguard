@@ -48,51 +48,28 @@ window.documentsAPI = {
         return;
       }
 
-      const corporateNorms = docs.filter(d => d.description && d.description.includes('Корпоративная норма'));
-      const standardEtalons = docs.filter(d => !d.description || !d.description.includes('Корпоративная норма'));
-
-      let html = '';
-
-      if (corporateNorms.length > 0) {
-        html += '<div class="doc-section-label" style="font-size:11px; color:var(--accent); font-weight:600; margin:8px 0 4px; text-transform:uppercase; letter-spacing:0.5px;">Корпоративные нормы (принятые риски)</div>';
-        html += corporateNorms.map(doc => {
-          const preview = doc.source_text
-            ? (doc.source_text.length > 120 ? doc.source_text.slice(0, 120) + '...' : doc.source_text)
-            : '';
-          return `
-          <div class="doc-item doc-item--corporate">
+      listEl.innerHTML = docs.map(doc => {
+        const fromAnalysis = !!(doc.description && doc.description.includes('Корпоративная норма'));
+        const preview = doc.source_text
+          ? (doc.source_text.length > 120 ? doc.source_text.slice(0, 120) + '...' : doc.source_text)
+          : '';
+        const userDesc = (doc.description && !fromAnalysis) ? doc.description : '';
+        return `
+          <div class="doc-item${fromAnalysis ? ' doc-item--corporate' : ''}">
             <div class="doc-info">
-              <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
+              <div class="doc-name-row">
+                <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
+                ${fromAnalysis ? '<span class="doc-badge doc-badge--analysis">Из анализа</span>' : ''}
+              </div>
               ${preview ? `<div class="doc-preview">${preview}</div>` : ''}
               <div class="doc-meta">
-                <span class="doc-tag doc-tag--corporate">${doc.contract_type === 'любой' ? 'любой (все договоры)' : doc.contract_type}</span>
-                <span class="doc-tag">${doc.chunks_count} чанк(ов)</span>
+                <span class="doc-tag${fromAnalysis ? ' doc-tag--corporate' : ''}">${doc.contract_type === 'любой' ? 'любой' : doc.contract_type}</span>
+                ${userDesc ? `<span>${userDesc}</span>` : ''}
               </div>
             </div>
             <button class="btn-icon" onclick="documentsAPI.deleteDoc('${doc.id}')" title="Удалить">✕</button>
           </div>`;
-        }).join('');
-      }
-
-      if (standardEtalons.length > 0) {
-        if (corporateNorms.length > 0) {
-          html += '<div class="doc-section-label" style="font-size:11px; color:var(--text-muted); font-weight:600; margin:12px 0 4px; text-transform:uppercase; letter-spacing:0.5px;">Пользовательские эталоны</div>';
-        }
-        html += standardEtalons.map(doc => `
-          <div class="doc-item">
-            <div class="doc-info">
-              <span class="doc-name" title="${doc.filename}">${doc.filename}</span>
-              <div class="doc-meta">
-                <span class="doc-tag">${doc.contract_type}</span>
-                ${doc.description ? `<span>${doc.description}</span>` : ''}
-              </div>
-            </div>
-            <button class="btn-icon" onclick="documentsAPI.deleteDoc('${doc.id}')" title="Удалить">✕</button>
-          </div>
-        `).join('');
-      }
-
-      listEl.innerHTML = html;
+      }).join('');
     } catch (e) {
       console.error('Failed to load user documents', e);
       listEl.innerHTML = '<div style="font-size:12px; color:var(--high);">Ошибка загрузки</div>';
