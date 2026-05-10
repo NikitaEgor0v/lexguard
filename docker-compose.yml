@@ -53,13 +53,13 @@ services:
       - OLLAMA_NUM_PARALLEL=${LLM_MAX_WORKERS:-2}
     volumes:
       - ollama_data:/root/.ollama
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
