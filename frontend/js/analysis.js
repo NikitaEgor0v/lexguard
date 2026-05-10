@@ -546,7 +546,7 @@ window.analysis = {
           <div class="auth-error" id="normError" style="display:none;"></div>
           <div style="display:flex; gap:8px; margin-top:16px;">
             <button class="btn-primary" id="normSubmitBtn" onclick="window.analysis.submitAcceptNorm()">Сохранить</button>
-            <button class="btn-outline" onclick="document.getElementById('acceptNormModal').style.display='none'">Отмена</button>
+            <button class="btn-outline" onclick="document.getElementById('acceptNormModal').classList.remove('open')">Отмена</button>
           </div>
         </div>
       `;
@@ -561,7 +561,7 @@ window.analysis = {
     const select = document.getElementById('normContractType');
     select.value = contractType || 'любой';
 
-    modal.style.display = 'flex';
+    modal.classList.add('open');
   },
 
   _detectCurrentContractType() {
@@ -602,8 +602,9 @@ window.analysis = {
         method: 'POST',
         body: formData
       });
-      document.getElementById('acceptNormModal').style.display = 'none';
+      document.getElementById('acceptNormModal').classList.remove('open');
       if (window.documentsAPI) window.documentsAPI.loadList();
+      this._showNormSavedNotice();
     } catch (e) {
       errEl.textContent = 'Ошибка: ' + e.message;
       errEl.style.display = 'block';
@@ -611,6 +612,18 @@ window.analysis = {
       btn.disabled = false;
       btn.textContent = 'Сохранить';
     }
+  },
+
+  _showNormSavedNotice() {
+    const notice = document.createElement('div');
+    notice.className = 'norm-saved-notice';
+    notice.textContent = 'Корпоративная норма сохранена';
+    document.body.appendChild(notice);
+    requestAnimationFrame(() => notice.classList.add('visible'));
+    setTimeout(() => {
+      notice.classList.remove('visible');
+      setTimeout(() => notice.remove(), 300);
+    }, 2500);
   },
 
   exportJSON() {

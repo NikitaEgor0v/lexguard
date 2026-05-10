@@ -865,6 +865,26 @@
   background: rgba(79, 142, 247, 0.15);
   color: var(--accent);
 }
+.norm-saved-notice {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 2000;
+  opacity: 0;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(79, 142, 247, 0.4);
+}
+.norm-saved-notice.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 .doc-preview {
   font-size: 11px;
   color: var(--text-muted);
