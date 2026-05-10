@@ -1,34 +1,30 @@
-# LexGuard Server Runbook
+# LexGuard — Серверный Runbook
 
-Пошаговая инструкция для production-запуска LexGuard на сервере с моделью `llama3.1:8b` (основная) или `gemma3:4b` (fallback).
+Пошаговая инструкция для production-запуска LexGuard.
 
-**Ожидаемое время:** 20–30 минут  
-**Требования:** Docker, Docker Compose, 16GB+ RAM (24GB+ рекомендуется для 8B модели)
+**Время:** 15–25 минут
+**Требования:** Docker, Docker Compose, 8GB+ RAM (16GB+ рекомендуется для qwen2.5:7b)
 
 ---
 
-## Быстрый старт (TL;DR)
+## Быстрый старт
 
 ```bash
-# 1. Клонировать и перейти
 cd lexguard
 
-# 2. Настроить модель
-echo "LLM_MODEL=llama3.1:8b" > .env
+# Настроить модель
+echo "LLM_MODEL=qwen2.5:7b" > .env
 
-# 3. Запустить инфраструктуру
+# Запустить всё
 docker compose up -d
 
-# 4. Подождать загрузку модели (5-15 мин)
+# Подождать загрузку модели
 docker logs -f lexguard-ollama-init
 
-# 5. Проверить статус
-curl http://localhost:8000/api/v1/status
+# Проверить
+curl http://localhost:8000/health
 
-# 6. Накатить миграции
-docker exec lexguard-backend alembic upgrade head
-
-# 7. Открыть UI
+# Открыть UI
 open http://localhost:3000
 ```
 
@@ -36,45 +32,42 @@ open http://localhost:3000
 
 ## Детальная инструкция
 
-### Шаг 1: Подготовка окружения (2 мин)
+### Шаг 1: Подготовка (2 мин)
 
 ```bash
-# Проверить версии
-docker --version   # >= 24.0
+docker --version        # >= 24.0
 docker compose version  # >= 2.20
-
-# Перейти в директорию проекта
 cd /path/to/lexguard
 ```
 
-### Шаг 2: Конфигурация модели (1 мин)
+### Шаг 2: Конфигурация (.env)
 
-Создайте файл `.env` в корне проекта:
+��оздайте `.env` в корне проекта:
 
 ```bash
-# Основная модель для сервера
-LLM_MODEL=llama3.1:8b
+# --- Модель ---
+LLM_MODEL=qwen2.5:7b
 
-# Опционально: увеличить таймауты для большой модели
+# --- Таймауты (опционально) ---
 LLM_REQUEST_TIMEOUT=300
 LLM_HEARTBEAT_TIMEOUT=600
 
-# Опционально: настроить RAG
+# --- RAG (опцио��ально) ---
 MIN_RELEVANCE_SCORE=0.50
+MAX_CHUNKS_PER_SEGMENT=3
 ```
 
-**Альтернатива (fallback):** Если `llama3.1:8b` работает медленно:
-```bash
-LLM_MODEL=gemma3:4b
-```
+**Доступные модели:**
+| Модель | VRAM | Скорость | Когда использовать |
+|--------|------|----------|-------------------|
+| `gemma2:2b` | 4GB | Быстро | Локальная разработка |
+| `gemma3:4b` | 8GB | Средне | Fallback |
+| `qwen2.5:7b` | 16GB | Средне | Production (рекомендуется) |
 
-### Шаг 3: Запуск инфраструктуры (3 мин)
+### Шаг 3: Запуск (3 мин)
 
 ```bash
-# Запустить все сервисы
 docker compose up -d
-
-# Проверить статус контейнеров
 docker compose ps
 ```
 
@@ -94,58 +87,42 @@ lexguard-qdrant       Up (healthy)
 ### Шаг 4: Загрузка модели (5-15 мин)
 
 ```bash
-# Следить за загрузкой модели
 docker logs -f lexguard-ollama-init
 ```
 
-Ожидаемый вывод:
-```
-pulling manifest
-pulling 8eeb52dfb3bb... 100%
-verifying sha256 digest
-writing manifest
-success
-Модель llama3.1:8b готова
-```
-
-**Если модель не загружается:**
+Если модель не загружается автоматически:
 ```bash
-# Загрузить вручную
-docker exec -it lexguard-ollama ollama pull llama3.1:8b
+docker exec -it lexguard-ollama ollama pull qwen2.5:7b
 ```
 
-### Шаг 5: Инициализация модели (2 мин)
+### Шаг 5: Прогрев модели (1 мин)
 
-Первый запрос к модели занимает 30-60 секунд, потому что модель загружается в память. Выполните контрольный запрос до приёма пользовательских документов:
+Первый запрос загружает модель в память (30-60 сек):
+```bash
+docker exec lexguard-ollama ollama run qwen2.5:7b "Привет"
+```
+
+### Шаг 6: Проверка системы
 
 ```bash
-# Контрольный запрос
-docker exec lexguard-ollama ollama run llama3.1:8b "Привет, как дела?"
-```
-
-Ожидаемый результат: ответ модели в течение 10-60 сек.
-
-### Шаг 6: Проверка системы (2 мин)
-
-```bash
-# Health check бэкенда
+# Health check
 curl http://localhost:8000/health
-# Ожидаемый ответ: {"status": "healthy"}
+# → {"status": "healthy"}
 
-# Статус системы с моделью
+# Полный статус
 curl http://localhost:8000/api/v1/status
 ```
 
-Ожидаемый ответ:
+Ожидаемый ответ `/api/v1/status`:
 ```json
 {
   "ollama": "running",
-  "model": "llama3.1:8b",
+  "model": "qwen2.5:7b",
   "model_available": true,
   "model_config": {
     "max_segment_chars": 1000,
-    "max_rag_chars": 2000,
-    "max_rag_norms": 4,
+    "max_rag_chars": 1200,
+    "max_rag_norms": 2,
     "request_timeout": 300,
     "heartbeat_timeout": 600
   },
@@ -157,40 +134,39 @@ curl http://localhost:8000/api/v1/status
 }
 ```
 
-### Шаг 7: Накатить миграции БД (1 мин)
+### Шаг 7: Миграции БД
 
-`backend` уже применяет миграции автоматически при старте контейнера (`alembic upgrade head` в `start.sh`).
-Этот шаг нужен для ручной проверки или повторного применения миграций.
+Миграции применяются автоматически при старте backend (`start.sh` → `alembic upgrade head`). Для ручной проверки:
 
 ```bash
 docker exec lexguard-backend alembic upgrade head
 ```
 
-### Шаг 8: Проверка готовности анализа (5 мин)
+### Шаг 8: Контрольный анализ (5 мин)
 
 1. Откройте `http://localhost:3000`
-2. Загрузите контрольный договор (небольшой, 1-2 страницы)
-3. Дождитесь завершения анализа
+2. Зарегистрируйтесь / войдите
+3. Загрузите небольшой договор (1-2 страницы)
+4. Дождитесь завершения
 
 **Критерии готовности:**
-- [ ] Анализ завершился статусом "completed" (не "failed")
-- [ ] Время анализа < 5 минут для 10-15 сегментов
-- [ ] Риски отображаются корректно
+- Анализ завершился статусом "completed"
+- Время < 5 минут для 10-15 сегментов
+- Риски отображаются корректно
+- AI-чат отвечает на вопросы
 
 ---
 
-## Переключение на Fallback
-
-Если `llama3.1:8b` работает слишком медленно (>2 мин на сегмент):
+## Переключение модели
 
 ```bash
 # 1. Остановить сервисы
 docker compose stop backend celery_worker
 
-# 2. Изменить модель
+# 2. Изменить модель в .env
 echo "LLM_MODEL=gemma3:4b" > .env
 
-# 3. Загрузить fallback-модель
+# 3. Загрузить модель
 docker exec -it lexguard-ollama ollama pull gemma3:4b
 
 # 4. Перезапустить
@@ -202,22 +178,17 @@ docker exec lexguard-ollama ollama run gemma3:4b "Тест"
 
 ---
 
-## Мониторинг и отладка
+## Мониторинг
 
-### Логи сервисов
+### Логи
 
 ```bash
-# Бэкенд
-docker logs -f lexguard-backend
-
-# Celery worker (анализ документов)
-docker logs -f lexguard_celery
-
-# Ollama (LLM)
-docker logs -f lexguard-ollama
+docker logs -f lexguard-backend       # API
+docker logs -f lexguard_celery        # Анализ документов
+docker logs -f lexguard-ollama        # LLM
 ```
 
-### Проверка прогресса анализа
+### Прогресс анализа
 
 ```bash
 # Через Redis
@@ -227,34 +198,26 @@ docker exec lexguard_redis redis-cli GET "progress:YOUR_ANALYSIS_ID"
 curl http://localhost:8000/api/v1/analyze/YOUR_ANALYSIS_ID
 ```
 
-### Типичные проблемы
+---
+
+## Типичные проблемы
 
 | Проблема | Решение |
 |----------|---------|
-| `model_available: false` | `docker exec lexguard-ollama ollama pull llama3.1:8b` |
+| `model_available: false` | `docker exec lexguard-ollama ollama pull <model>` |
 | Таймаут анализа | Увеличить `LLM_REQUEST_TIMEOUT` в .env |
-| "Analysis interrupted" | Увеличить `LLM_HEARTBEAT_TIMEOUT` в .env |
-| OOM (Out of Memory) | Переключиться на `gemma3:4b` |
+| "Analysis interrupted" | Увеличить `LLM_HEARTBEAT_TIMEOUT` |
+| OOM (Out of Memory) | Переключиться на модель меньшего размера |
 | RAG не находит нормы | Уменьшить `MIN_RELEVANCE_SCORE` до 0.40 |
+| 502 Bad Gateway | Подождать старт backend или перезапустить frontend |
 
 ---
 
-## Чек-лист готовности
+## ��ек-лист готовности
 
 - [ ] Docker и Docker Compose установлены
-- [ ] Файл `.env` создан с `LLM_MODEL=llama3.1:8b`
-- [ ] Все контейнеры запущены (`backend` и `celery` могут быть просто `Up` без healthcheck)
-- [ ] Модель загружена (`model_available: true`)
-- [ ] Модель инициализирована (первый запрос выполнен)
-- [ ] Миграции БД накатаны
-- [ ] Проверка готовности анализа пройдена
-- [ ] Fallback-модель загружена (опционально)
-
----
-
-## Контакты
-
-При возникновении проблем проверьте:
-1. Логи: `docker logs -f lexguard_celery`
-2. Статус: `curl http://localhost:8000/api/v1/status`
-3. Документацию: `docs/EDGE_CASES_AND_RISKS.md`
+- [ ] `.env` создан с нужной моделью
+- [ ] Все контейнеры запущены
+- [ ] Модель загружена и прогрета
+- [ ] Health-check возвращает `healthy`
+- [ ] Контроль��ый анализ пройден

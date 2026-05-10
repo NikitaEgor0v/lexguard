@@ -260,12 +260,12 @@ RAG-контекст (если есть) структурирован следу
     → is_risky: false, risk_level: none
 
 === ПРАВИЛА SAFE_REDACTION ===
-Если is_risky: true И risk_level: high, ОБЯЗАТЕЛЬНО предложи safe_redaction:
+Если is_risky: true И risk_level: high или medium, ОБЯЗАТЕЛЬНО предложи safe_redaction:
 - Содержит ТОЛЬКО новую безопасную формулировку (готовый текст для замены)
 - НЕ содержит исходный опасный текст даже частично
 - НЕ начинается со слов из оригинала
 - НЕ содержит пояснений — только текст замены
-- Для low/medium/none — safe_redaction: null
+- Для low/none — safe_redaction: null
 
 ПРИМЕР safe_redaction для пункта о расторжении:
 Оригинал: "При расторжении Заказчик оплачивает 100% стоимости"
@@ -579,38 +579,20 @@ class AnalyzerService:
             )
     
     def _validate_safe_redaction(self, safe_redaction: str, original_segment: str) -> str | None:
-        """Validate that safe_redaction doesn't contain dangerous original text."""
+        """Validate that safe_redaction is meaningfully different from original."""
         if not safe_redaction or not safe_redaction.strip():
             return None
-        
+
         safe_redaction = safe_redaction.strip()
         original_lower = original_segment.lower()
         safe_lower = safe_redaction.lower()
-        
-        DANGEROUS_PHRASES = [
-            "штраф",
-            "неустойк",
-            "односторонн",
-            "без компенсац",
-            "без объяснен",
-            "без причин",
-            "любой момент",
-            "немедленн",
-            "по усмотрению"
-        ]
-        
-        # Check if safe_redaction starts with dangerous phrase
-        for phrase in DANGEROUS_PHRASES:
-            if safe_lower.startswith(phrase):
-                logger.warning(f"safe_redaction starts with dangerous phrase: {phrase}, rejecting")
-                return None
-        
-        # Check for high overlap with SequenceMatcher instead of sets
+
+        # Reject if the fix is essentially a copy of the original
         similarity = SequenceMatcher(None, safe_lower, original_lower).ratio()
         if similarity > 0.85:
             logger.warning(f"safe_redaction has >85% similarity with original (score: {similarity:.2f}), rejecting")
             return None
-        
+
         return safe_redaction
 
     def _summary(self, risks: list[RiskItem]) -> AnalysisSummary:

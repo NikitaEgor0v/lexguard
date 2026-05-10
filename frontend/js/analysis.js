@@ -407,11 +407,6 @@ window.analysis = {
             <span class="risk-detail-label">Рекомендация</span>
             <div class="recommendation-box">${risk.recommendation}</div>
           </div>` : ''}
-          ${risk.rag_context ? `
-          <div class="risk-detail-row">
-            <span class="risk-detail-label">Контекст RAG</span>
-            <div class="rag-context">${risk.rag_context}</div>
-          </div>` : ''}
           ${risk.safe_redaction ? `
           <div class="risk-detail-row safe-redaction-row">
             <span class="risk-detail-label">Исправленный текст</span>
