@@ -282,6 +282,27 @@ safe_redaction: "При досрочном расторжении договор
 
 
 
+_FALSE_POSITIVE_RISK_PHRASES = (
+    "не ограничен верхним пределом",
+    "без верхнего предела",
+    "верхний предел",
+    "не ограничена",
+)
+
+
+def _correct_false_positive(data: dict, segment: str) -> dict:
+    """Override LLM result when it claims 'no upper limit' but the text explicitly has one."""
+    if not data.get("is_risky"):
+        return data
+    desc = (data.get("risk_description") or "").lower()
+    if not any(p in desc for p in _FALSE_POSITIVE_RISK_PHRASES):
+        return data
+    if re.search(r"не\s+более\s+\d", segment.lower()):
+        return {**data, "is_risky": False, "risk_level": "none",
+                "risk_description": None, "recommendation": None, "safe_redaction": None}
+    return data
+
+
 class AnalyzerService:
     def __init__(self):
         self.rag = RAGService()
@@ -544,7 +565,8 @@ class AnalyzerService:
                 clean = raw.replace("```json", "").replace("```", "").strip()
             
             data = json.loads(clean)
-            
+            data = _correct_false_positive(data, segment)
+
             is_risky = bool(data.get("is_risky", False))
             risk_level = RiskLevel(data.get("risk_level", "none"))
             safe_redaction = data.get("safe_redaction")
