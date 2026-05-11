@@ -416,7 +416,7 @@ class RAGService:
         parts: list[str] = []
 
         corporate_norms = [uc for uc in result.user_chunks if uc.score >= CORPORATE_NORM_SCORE]
-        regular_user = [uc for uc in result.user_chunks if uc.score < 0.82]
+        regular_user = [uc for uc in result.user_chunks if uc.score < CORPORATE_NORM_SCORE]
 
         for chunk in corporate_norms:
             parts.append(chunk.format_for_prompt())

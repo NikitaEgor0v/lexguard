@@ -16,7 +16,7 @@ from models.schemas import (
 )
 from repositories.analysis_repository import AnalysisRepository
 from services.executive_summary import build_executive_summary
-from services.rag import RAGService, RAGResult
+from services.rag import RAGService, RAGResult, CORPORATE_NORM_SCORE
 
 # Patterns for neutral segments that should always be is_risky: false
 # These patterns match segments that contain ONLY these elements and nothing else substantive
@@ -383,13 +383,30 @@ class AnalyzerService:
                     max_chars=MAX_RAG_CONTEXT_CHARS,
                 )
                 rag_context_str = RAGService.format_rag_context(rag_result, MAX_RAG_CONTEXT_CHARS)
-                
-                raw = self._call_llm(
-                    segment,
-                    rag_result,
-                    heartbeat_callback=lambda: self._update_heartbeat(r, analysis_id),
+
+                has_corporate_norm = any(
+                    uc.score >= CORPORATE_NORM_SCORE for uc in rag_result.user_chunks
                 )
-                risk_item = self._parse(raw, segment, i + 1, rag_context_str)
+                if has_corporate_norm:
+                    logger.info(f"Segment {i+1} matched corporate norm (skip LLM)")
+                    risk_item = RiskItem(
+                        segment_id=i + 1,
+                        text=segment,
+                        is_risky=False,
+                        risk_level=RiskLevel.NONE,
+                        risk_category=None,
+                        risk_description=None,
+                        recommendation=None,
+                        rag_context=rag_context_str,
+                        safe_redaction=None,
+                    )
+                else:
+                    raw = self._call_llm(
+                        segment,
+                        rag_result,
+                        heartbeat_callback=lambda: self._update_heartbeat(r, analysis_id),
+                    )
+                    risk_item = self._parse(raw, segment, i + 1, rag_context_str)
                 all_risks.append(risk_item)
                 batch_risks.append(risk_item)
                 self._update_heartbeat(r, analysis_id)
