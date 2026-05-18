@@ -22,6 +22,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434") + "/api/generate"
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
+
 def _session_to_response(session: ChatSession) -> ChatSessionResponse:
     return ChatSessionResponse(
         session_id=session.id,
@@ -81,7 +82,7 @@ class ChatService:
         """Call Ollama generation API and return text answer."""
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
+            "prompt": f"/no_think\n\n{prompt}",
             "stream": False,
             "options": {
                 "temperature": self.model_config.temperature,

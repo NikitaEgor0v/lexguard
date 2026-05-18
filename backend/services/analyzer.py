@@ -78,6 +78,7 @@ logger = logging.getLogger(__name__)
 MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
 MODEL_CONFIG = get_model_config(MODEL_NAME)
 
+
 # Adaptive limits from model config (scale with model capacity)
 MAX_SEGMENT_CHARS = MODEL_CONFIG.max_segment_chars
 MAX_RAG_CONTEXT_CHARS = MODEL_CONFIG.max_rag_chars
@@ -494,7 +495,7 @@ class AnalyzerService:
 
             payload = {
                 "model": MODEL_NAME,
-                "prompt": f"{SYSTEM_PROMPT}\n\n{user_prompt}",
+                "prompt": f"/no_think\n\n{SYSTEM_PROMPT}\n\n{user_prompt}",
                 "stream": False,
                 "options": {
                     "temperature": MODEL_CONFIG.temperature,
@@ -546,7 +547,7 @@ class AnalyzerService:
             return "иной"
         payload = {
             "model": MODEL_NAME,
-            "prompt": f"{CONTRACT_CLASSIFY_PROMPT}{preview}",
+            "prompt": f"/no_think\n\n{CONTRACT_CLASSIFY_PROMPT}{preview}",
             "stream": False,
             "options": {
                 "temperature": 0.0,
