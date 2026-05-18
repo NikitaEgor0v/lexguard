@@ -48,6 +48,18 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
         max_segment_chars=1000, max_rag_chars=1200, max_rag_norms=2,
         use_compact_prompt=False,
     ),
+    "qwen3:8b": ModelConfig(
+        context_window=8192, max_output=1024, safe_context=6000,
+        temperature=0.1,
+        max_segment_chars=1200, max_rag_chars=2000, max_rag_norms=3,
+        use_compact_prompt=False,
+    ),
+    "qwen3:14b": ModelConfig(
+        context_window=16384, max_output=1024, safe_context=12000,
+        temperature=0.1,
+        max_segment_chars=1500, max_rag_chars=3000, max_rag_norms=4,
+        use_compact_prompt=False,
+    ),
 }
 
 MODEL_NAME = os.getenv("LLM_MODEL", "gemma2:2b")
