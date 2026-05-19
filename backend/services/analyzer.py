@@ -571,6 +571,57 @@ class AnalyzerService:
             logger.warning("Классификация типа договора: %s", e)
         return "иной"
 
+    @staticmethod
+    def _try_partial_parse(raw: str) -> dict | None:
+        """Extract key fields from truncated JSON via regex.
+
+        When the LLM response is cut off mid-JSON (e.g. num_predict limit),
+        json.loads() fails. But the first fields (is_risky, risk_level) are
+        usually already present in the raw text. We recover them here so that
+        a truncated '{"is_risky": false, "risk_level": "none", "risk_category":'
+        is not incorrectly marked as risky.
+
+        Returns a dict with recovered fields or None if is_risky can't be found.
+        """
+        is_risky_m = re.search(r'"is_risky"\s*:\s*(true|false)', raw, re.IGNORECASE)
+        if not is_risky_m:
+            return None
+
+        is_risky = is_risky_m.group(1).lower() == "true"
+
+        risk_level_m = re.search(
+            r'"risk_level"\s*:\s*"(high|medium|low|none)"', raw, re.IGNORECASE,
+        )
+        risk_level = (
+            risk_level_m.group(1).lower() if risk_level_m
+            else ("low" if is_risky else "none")
+        )
+
+        category_m = re.search(
+            r'"risk_category"\s*:\s*"(финансовый|правовой|операционный|репутационный|интеллектуальный)"',
+            raw,
+        )
+        risk_category = category_m.group(1) if category_m else None
+
+        # For string fields use a non-greedy match up to the next unescaped quote
+        desc_m = re.search(r'"risk_description"\s*:\s*"([^"]{4,})"', raw)
+        risk_description = desc_m.group(1) if desc_m else None
+
+        rec_m = re.search(r'"recommendation"\s*:\s*"([^"]{4,})"', raw)
+        recommendation = rec_m.group(1) if rec_m else None
+
+        safe_m = re.search(r'"safe_redaction"\s*:\s*"([^"]{4,})"', raw)
+        safe_redaction = safe_m.group(1) if safe_m else None
+
+        return {
+            "is_risky": is_risky,
+            "risk_level": risk_level,
+            "risk_category": risk_category,
+            "risk_description": risk_description,
+            "recommendation": recommendation,
+            "safe_redaction": safe_redaction,
+        }
+
     def _parse(self, raw: str, segment: str, sid: int, rag: str | None) -> RiskItem:
         try:
             # 1. Robust JSON extraction: look for the first '{' and last '}'
@@ -581,20 +632,20 @@ class AnalyzerService:
             else:
                 # Fallback to the original logic if no braces found
                 clean = raw.replace("```json", "").replace("```", "").strip()
-            
+
             data = json.loads(clean)
             data = _correct_false_positive(data, segment)
 
             is_risky = bool(data.get("is_risky", False))
             risk_level = RiskLevel(data.get("risk_level", "none"))
             safe_redaction = data.get("safe_redaction")
-            
+
             # Validate safe_redaction: only for high risk, must not contain original text
             if safe_redaction and is_risky and risk_level in (RiskLevel.HIGH, RiskLevel.MEDIUM):
                 safe_redaction = self._validate_safe_redaction(safe_redaction, segment)
             else:
                 safe_redaction = None
-            
+
             return RiskItem(
                 segment_id=sid, text=segment,
                 is_risky=is_risky,
@@ -606,6 +657,36 @@ class AnalyzerService:
                 safe_redaction=safe_redaction,
             )
         except Exception as e:
+            # 2. Attempt partial recovery from truncated JSON
+            partial = self._try_partial_parse(raw)
+            if partial is not None:
+                logger.warning(
+                    "Partial parse recovery segment %d: is_risky=%s, risk_level=%s. "
+                    "Original error: %s",
+                    sid, partial["is_risky"], partial["risk_level"], str(e),
+                )
+                is_risky = partial["is_risky"]
+                risk_level = RiskLevel(partial["risk_level"])
+                safe_redaction = partial.get("safe_redaction")
+
+                if safe_redaction and is_risky and risk_level in (RiskLevel.HIGH, RiskLevel.MEDIUM):
+                    safe_redaction = self._validate_safe_redaction(safe_redaction, segment)
+                else:
+                    safe_redaction = None
+
+                cat = partial.get("risk_category")
+                return RiskItem(
+                    segment_id=sid, text=segment,
+                    is_risky=is_risky,
+                    risk_level=risk_level,
+                    risk_category=RiskCategory(cat) if cat else None,
+                    risk_description=partial.get("risk_description"),
+                    recommendation=partial.get("recommendation"),
+                    rag_context=rag,
+                    safe_redaction=safe_redaction,
+                )
+
+            # 3. Complete parse failure — no fields recoverable
             logger.error(
                 "Parse error segment %d: %s. Raw LLM response: %s",
                 sid, str(e), raw[:1000]
@@ -614,7 +695,7 @@ class AnalyzerService:
                 segment_id=sid, text=segment, is_risky=True,
                 risk_level=RiskLevel.LOW, risk_category=None,
                 risk_description="Ошибка обработки ответа ИИ — требует ручной проверки",
-                recommendation="Проверьте фрагмент вручную (ИИ вернул невалидный формат)", 
+                recommendation="Проверьте фрагмент вручную (ИИ вернул невалидный формат)",
                 rag_context=rag,
             )
     
