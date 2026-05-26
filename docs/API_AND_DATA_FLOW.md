@@ -79,8 +79,8 @@
 ### `DELETE /api/v1/documents/{id}`
 Удаление эталона (из PostgreSQL и Qdrant).
 
-### `POST /api/v1/documents/from-risk`
-Создание эталона из карточки риска (кнопка "Принять как норму компании" в UI).
+### `POST /api/v1/documents/upload/text`
+Создание эталона из текста (используется кнопкой «Принять как норму компании» в UI).
 
 ---
 
@@ -89,11 +89,14 @@
 ### `POST /api/v1/chat/session`
 Создание или получение чат-сессии для анализа (Get-or-Create по `analysis_id`).
 
-### `POST /api/v1/chat/message`
+### `POST /api/v1/chat/session/{session_id}/message`
 Отправка сообщения в чат. Ответ AI генерируется синхронно.
 
-### `GET /api/v1/chat/session/{session_id}/messages`
-История сообщений сессии.
+### `GET /api/v1/chat/session/{session_id}`
+Получение чат-сессии с историей сообщений.
+
+### `GET /api/v1/chat/sessions`
+Список всех чат-сессий пользователя.
 
 ---
 

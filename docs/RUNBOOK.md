@@ -3,7 +3,7 @@
 Пошаговая инструкция для production-запуска LexGuard.
 
 **Время:** 15–25 минут
-**Требования:** Docker, Docker Compose, 8GB+ RAM (16GB+ рекомендуется для qwen2.5:7b)
+**Требования:** Docker, Docker Compose, 8GB+ RAM (16GB+ рекомендуется для qwen3:8b)
 
 ---
 
@@ -13,7 +13,7 @@
 cd lexguard
 
 # Настроить модель
-echo "LLM_MODEL=qwen2.5:7b" > .env
+echo "LLM_MODEL=qwen3:8b" > .env
 
 # Запустить всё
 docker compose up -d
@@ -46,7 +46,7 @@ cd /path/to/lexguard
 
 ```bash
 # --- Модель ---
-LLM_MODEL=qwen2.5:7b
+LLM_MODEL=qwen3:8b
 
 # --- Таймауты (опционально) ---
 LLM_REQUEST_TIMEOUT=300
@@ -62,7 +62,8 @@ MAX_CHUNKS_PER_SEGMENT=3
 |--------|------|----------|-------------------|
 | `gemma2:2b` | 4GB | Быстро | Локальная разработка |
 | `gemma3:4b` | 8GB | Средне | Fallback |
-| `qwen2.5:7b` | 16GB | Средне | Production (рекомендуется) |
+| `qwen3:8b` | 16GB | Средне | Production (рекомендуется) |
+| `qwen3:14b` | 24GB+ | Медленно | Максимальное качество |
 
 ### Шаг 3: Запуск (3 мин)
 
@@ -92,14 +93,14 @@ docker logs -f lexguard-ollama-init
 
 Если модель не загружается автоматически:
 ```bash
-docker exec -it lexguard-ollama ollama pull qwen2.5:7b
+docker exec -it lexguard-ollama ollama pull qwen3:8b
 ```
 
 ### Шаг 5: Прогрев модели (1 мин)
 
 Первый запрос загружает модель в память (30-60 сек):
 ```bash
-docker exec lexguard-ollama ollama run qwen2.5:7b "Привет"
+docker exec lexguard-ollama ollama run qwen3:8b "Привет"
 ```
 
 ### Шаг 6: Проверка системы
@@ -117,12 +118,12 @@ curl http://localhost:8000/api/v1/status
 ```json
 {
   "ollama": "running",
-  "model": "qwen2.5:7b",
+  "model": "qwen3:8b",
   "model_available": true,
   "model_config": {
-    "max_segment_chars": 1000,
-    "max_rag_chars": 1200,
-    "max_rag_norms": 2,
+    "max_segment_chars": 1200,
+    "max_rag_chars": 2000,
+    "max_rag_norms": 3,
     "request_timeout": 300,
     "heartbeat_timeout": 600
   },

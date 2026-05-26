@@ -8,7 +8,7 @@
 
 ```bash
 # 1. Настроить модель
-echo "LLM_MODEL=qwen2.5:7b" > .env
+echo "LLM_MODEL=qwen3:8b" > .env
 
 # 2. Запустить инфраструктуру
 docker compose up -d
@@ -29,7 +29,9 @@ open http://localhost:3000
 |--------|---------------|---------------------|--------------|
 | `gemma2:2b` | 2048 | 400/800 chars | Локальная разработка (быстро, 4GB VRAM) |
 | `gemma3:4b` | 8192 | 800/1500 chars | Fallback на сервере (8GB VRAM) |
-| `qwen2.5:7b` | 4096 | 1000/1200 chars | Production (рекомендуемая, 16GB VRAM) |
+| `qwen2.5:7b` | 4096 | 1000/1200 chars | Средний вариант (16GB VRAM) |
+| `qwen3:8b` | 8192 | 1200/2000 chars | Production (рекомендуемая, 16GB VRAM) |
+| `qwen3:14b` | 16384 | 1500/3000 chars | Максимальное качество (24GB+ VRAM) |
 
 Модель задается переменной `LLM_MODEL`. Все адаптивные лимиты (размер сегмента, объем RAG-контекста, количество норм) определяются автоматически через `config/model_registry.py`.
 
@@ -81,7 +83,7 @@ open http://localhost:3000
 | Async Tasks | Celery + Redis |
 | Database | PostgreSQL 16 |
 | Vector DB | Qdrant (cosine, 768d) |
-| LLM | Ollama (qwen2.5:7b / gemma2:2b / gemma3:4b) |
+| LLM | Ollama (qwen3:8b / gemma3:4b / gemma2:2b) |
 | Embeddings | intfloat/multilingual-e5-base |
 | Frontend | Vanilla JS + Nginx |
 | Orchestration | Docker Compose |
