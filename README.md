@@ -1,40 +1,43 @@
 # LexGuard — Система анализа юридических документов
 
-**Дипломная работа** — Егоров Н.Р., УрФУ, группа РИ-420944, 2026  
-Направление: 09.03.04 Программная инженерия
+Интеллектуальная система анализа юридических документов.  
+Выявляет юридические, финансовые и операционные риски в договорах (PDF, DOCX) с помощью LLM и RAG.
 
 ## Технологический стек
 
 | Компонент | Технология |
-|---|---|
-| LLM | Gemma3 (локально, Ollama) |
-| Эмбеддинги | intfloat/multilingual-e5-base |
-| Векторная БД | Qdrant |
-| Backend | Python 3.11, FastAPI |
-| Frontend | HTML/CSS/JS (без фреймворков) |
-| Веб-сервер | Nginx |
-| Оркестрация | Docker Compose |
+|-----------|-----------|
+| Backend | FastAPI + SQLAlchemy 2.0 + Alembic |
+| Async Tasks | Celery + Redis |
+| Database | PostgreSQL 16 |
+| Vector DB | Qdrant (cosine, 768d) |
+| LLM | Ollama (qwen3:8b / gemma3:4b / gemma2:2b) |
+| Embeddings | intfloat/multilingual-e5-base |
+| Frontend | Vanilla JS + Nginx |
+| Orchestration | Docker Compose |
 
 ## Быстрый старт
 
 ### Требования
 - Docker Desktop (macOS, Linux, Windows)
-- 8+ ГБ оперативной памяти
+- 8+ ГБ оперативной памяти (16+ ГБ рекомендуется для qwen3:8b)
 - 10+ ГБ свободного места на диске
 
 ### Запуск
 
 ```bash
-# 1. Клонируй или распакуй проект
 cd lexguard
 
-# 2. Запусти весь стек одной командой
+# Настроить модель
+echo "LLM_MODEL=qwen3:8b" > .env
+
+# Запустить весь стек
 docker compose up -d
 
-# 3. Дождись загрузки модели Gemma3 (~3-5 минут при первом запуске)
-docker logs lexguard-ollama-init -f
+# Дождаться загрузки модели (~5-15 минут при первом запуске)
+docker logs -f lexguard-ollama-init
 
-# 4. Открой приложение
+# Открыть приложение
 open http://localhost:3000
 ```
 
@@ -44,12 +47,22 @@ open http://localhost:3000
 # Статус всех контейнеров
 docker compose ps
 
-# API статус
+# Health check
 curl http://localhost:8000/health
 
-# Статус модели и RAG
+# Полный статус (модель, RAG, конфигурация)
 curl http://localhost:8000/api/v1/status
 ```
+
+## Поддерживаемые модели
+
+| Модель | VRAM | Рекомендация |
+|--------|------|--------------|
+| `gemma2:2b` | 4 ГБ | Локальная разработка (быстро) |
+| `gemma3:4b` | 8 ГБ | Fallback на сервере |
+| `qwen3:8b` | 16 ГБ | Production (рекомендуется) |
+
+Модель задаётся переменной `LLM_MODEL` в `.env`. Адаптивные лимиты (размер сегмента, объём RAG-контекста) определяются автоматически через `config/model_registry.py`.
 
 ## Структура проекта
 
@@ -58,23 +71,30 @@ lexguard/
 ├── docker-compose.yml
 ├── backend/
 │   ├── Dockerfile
-│   ├── main.py              # FastAPI приложение
+│   ├── main.py                # FastAPI приложение
 │   ├── requirements.txt
+│   ├── config/
+│   │   └── model_registry.py  # Адаптивная конфигурация моделей
 │   ├── data/
-│   │   └── legal_norms.json # Расширенная база нормативных шаблонов (~294 норм)
+│   │   └── legal_norms.json   # База нормативных шаблонов
 │   ├── api/
-│   │   └── routes.py        # REST API эндпоинты
+│   │   ├── routes.py          # REST API эндпоинты
+│   │   ├── chat_routes.py     # AI-чат по результатам анализа
+│   │   └── auth_routes.py     # JWT-аутентификация
 │   ├── models/
-│   │   └── schemas.py       # Pydantic схемы
+│   │   └── schemas.py         # Pydantic схемы
 │   └── services/
-│       ├── preprocessor.py  # Извлечение и сегментация текста
-│       ├── rag.py           # Векторный RAG (Qdrant + e5)
-│       └── analyzer.py      # Анализ через Gemma3
+│       ├── preprocessor.py    # Извлечение и сегментация текста
+│       ├── rag.py             # Векторный RAG (Qdrant + e5)
+│       ├── analyzer.py        # Анализ через LLM
+│       ├── chat_service.py    # AI-чат
+│       └── executive_summary.py
 ├── frontend/
 │   ├── Dockerfile
-│   └── index.html           # SPA интерфейс
-└── nginx/
-    └── default.conf         # Реверс-прокси
+│   └── index.html             # SPA интерфейс
+├── nginx/
+│   └── default.conf           # Реверс-прокси
+└── docs/                      # Техническая документация
 ```
 
 ## API
@@ -83,7 +103,7 @@ lexguard/
 |---|---|---|
 | POST | `/api/v1/analyze` | Загрузить и проанализировать договор |
 | GET | `/api/v1/analyze/{id}` | Получить результат по ID |
-| GET | `/api/v1/analyze/{id}/grouped` | Получить риски, сгруппированные по категориям |
+| GET | `/api/v1/analyze/{id}/grouped` | Риски, сгруппированные по категориям |
 | GET | `/api/v1/status` | Статус системы (Ollama, RAG) |
 | GET | `/health` | Healthcheck |
 
@@ -124,15 +144,18 @@ curl -X POST http://localhost:3000/api/v1/analyze \
 }
 ```
 
-## База норм и контроль качества
+## Конфигурация
 
-```bash
-# Сгенерировать расширенную базу legal_norms.json
-python backend/scripts/generate_extended_legal_norms.py
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `LLM_MODEL` | Модель Ollama | `gemma2:2b` |
+| `OLLAMA_URL` | URL Ollama API | `http://ollama:11434` |
+| `LLM_REQUEST_TIMEOUT` | Таймаут запроса к Ollama (сек) | `300` |
+| `MIN_RELEVANCE_SCORE` | Порог отсечения RAG (0.0–1.0) | `0.50` |
+| `MAX_CHUNKS_PER_SEGMENT` | Максимум RAG-чанков на сегмент | `3` |
+| `MAX_SEGMENTS_PER_DOCUMENT` | Лимит сегментов (0 = без лимита) | `500` |
 
-# Провалидировать схему и качество норм
-python backend/scripts/validate_legal_norms.py
-```
+Полный список переменных — в `.env.example`.
 
 ## Остановка
 
@@ -141,7 +164,7 @@ docker compose down          # остановить контейнеры
 docker compose down -v       # остановить и удалить данные
 ```
 
-## Архитектура системы
+## Архитектура
 
 ```
 Пользователь
@@ -149,17 +172,20 @@ docker compose down -v       # остановить и удалить данны
     ▼
 [Nginx :3000]
     │
-    ├── / → Frontend (HTML/CSS/JS)
+    ├── / → Frontend (Vanilla JS)
     │
     └── /api/ → [FastAPI :8000]
                     │
-                    ├── PreprocessorService
-                    │   └── Сегментация текста
+                    ├── PreprocessorService → Сегментация текста
                     │
-                    ├── RAGService
-                    │   ├── multilingual-e5-base (эмбеддинги)
-                    │   └── Qdrant (векторный поиск)
+                    ├── Celery Worker
+                    │   ├── RAGService (Qdrant + e5)
+                    │   └── AnalyzerService (Ollama LLM)
                     │
-                    └── AnalyzerService
-                        └── Gemma3 via Ollama :11434
+                    ├── PostgreSQL → Результаты, пользователи, чат
+                    └── Redis → Очередь задач, прогресс
 ```
+
+## Документация
+
+Подробная техническая документация — в папке [`docs/`](docs/README.md).

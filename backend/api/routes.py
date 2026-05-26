@@ -50,7 +50,7 @@ def _verify_analysis_owner(
         raise HTTPException(status_code=403, detail="Доступ запрещён")
     
     return row
-DEBUG_LOG_PATH = "/Users/nikitaegorov/Мои проекты/lexguard/.cursor/debug-3d0ca5.log"
+DEBUG_LOG_PATH = "/tmp/lexguard-debug.log"
 DEBUG_ENDPOINT = "http://127.0.0.1:7691/ingest/bcb6efda-9fe5-4ac7-b530-a243639a005e"
 DEBUG_ENDPOINT_DOCKER_FALLBACK = "http://host.docker.internal:7691/ingest/bcb6efda-9fe5-4ac7-b530-a243639a005e"
 
